@@ -186,7 +186,7 @@ textarea#dxfText{width:100%;height:180px;font-family:var(--mono);font-size:11px;
         <button data-sm="stations" aria-pressed="true">Stations</button>
         <button data-sm="sweep" aria-pressed="false">Continuous</button>
       </div>
-      <div class="notice bad" id="sensorNotice" hidden><p id="sensorNoticeText"></p></div>
+      <div class="notice bad" id="sensorNotice" hidden><p id="sensorNoticeText"></p><a class="btn accent" id="sensorLink" hidden href="https://dp-infinium.github.io/wall-arc-tracer/" target="_blank" rel="noopener" style="text-decoration:none">Open in Safari</a></div>
       <div class="notice warn" id="relinkBanner" hidden>
         <p id="relinkText">The phone's heading reference was reset. Put the phone back on the last recorded station and tap Re-link before you continue.</p>
       </div>
@@ -1270,7 +1270,7 @@ const needRelink = () => state.sensorMode !== "sweep" && sens.on && state.sensor
 // Inside the Claude app or claude.ai the page runs in a locked frame that never receives motion
 // sensors; iOS reports that as "denied" even though nothing on the phone is set to deny.
 const inClaude = isFramed || !!window.claude;
-const CLAUDE_MSG = "Live tracing can't run inside Claude. The Claude app and claude.ai don't let pages use the iPhone's motion sensors, so Safari reports access as denied. Nothing on your phone needs changing. To trace with sensors, open the standalone copy (wall-arc-tracer.html) in Safari from an https:// address. Here you can use the String line method and review or export results.";
+const CLAUDE_MSG = "Live tracing can't run inside Claude. The Claude app and claude.ai don't let pages use the iPhone's motion sensors, so Safari reports access as denied. Nothing on your phone needs changing. To trace with sensors, open https://dp-infinium.github.io/wall-arc-tracer/ in Safari. Here you can use the String line method and review or export results.";
 function sensorReason() {
   if (inClaude) return CLAUDE_MSG;
   if (!window.isSecureContext) return "Safari only gives motion sensors to pages loaded over https://. Open this page from an https address.";
@@ -1281,6 +1281,7 @@ function showSensorNotice(t, tone) {
   $("sensorNoticeText").textContent = t || "";
   $("sensorNotice").className = "notice " + (tone || (inClaude ? "warn" : "bad"));
   $("sensorNotice").hidden = !t;
+  $("sensorLink").hidden = !(t && t === CLAUDE_MSG);
 }
 
 async function startSensors() {
