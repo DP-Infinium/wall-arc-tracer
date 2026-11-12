@@ -1,0 +1,1587 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#ECEFF3"><meta name="apple-mobile-web-app-title" content="Arc Tracer"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Wall Arc Tracer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: field instrument. Sticky tab strip; on a phone one big readout + one big button per screen;
+   on desktop the results split into plan | deviation side by side. Survey-orange accent on cool grey. */
+:root{
+  --bg:#ECEFF3; --surface:#FFFFFF; --sunk:#E2E7EC; --ink:#13202B; --muted:#56636F; --line:#CBD3DB;
+  --accent:#D4520A; --accent-ink:#FFFFFF; --accent-soft:#FBE6D9;
+  --trace:#1D5BC6; --design:#7A45C2; --good:#1C7A45; --warn:#9A6205; --bad:#BC3328;
+  --good-soft:#DDF0E4; --warn-soft:#F6EBD3; --bad-soft:#F7DEDB;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1317; --surface:#161E25; --sunk:#1E2830; --ink:#E5EBF0; --muted:#94A2AE; --line:#2B3843;
+  --accent:#FF7A2E; --accent-ink:#1A0D04; --accent-soft:#3A2416;
+  --trace:#6DA0FF; --design:#B793F2; --good:#4FC285; --warn:#E3AE48; --bad:#F2766A;
+  --good-soft:#163024; --warn-soft:#33280F; --bad-soft:#3A1D1A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1317; --surface:#161E25; --sunk:#1E2830; --ink:#E5EBF0; --muted:#94A2AE; --line:#2B3843;
+  --accent:#FF7A2E; --accent-ink:#1A0D04; --accent-soft:#3A2416;
+  --trace:#6DA0FF; --design:#B793F2; --good:#4FC285; --warn:#E3AE48; --bad:#F2766A;
+  --good-soft:#163024; --warn-soft:#33280F; --bad-soft:#3A1D1A; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--display);font-variation-settings:"wdth" 100;font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:0 48px}
+h1,h2,h3{margin:0;text-wrap:balance}
+h2{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+p{margin:0}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap;padding-block:10px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 220px}
+.brand svg{flex:none}
+.brand h1{font-size:19px;font-weight:800;font-variation-settings:"wdth" 118;letter-spacing:-.01em;line-height:1.1}
+.brand .sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;background:var(--sunk);border-radius:999px;padding:3px;gap:2px;flex:0 1 auto}
+.tabs button{border:0;background:none;padding:8px 16px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+main{display:grid;gap:14px;padding-top:14px}
+section{display:grid;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* banners */
+.banner,.notice{border-radius:var(--r);padding:12px 14px;display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;font-size:14px}
+.banner{background:var(--accent-soft);border:1px dashed var(--accent)}
+.notice{background:var(--sunk);border:1px solid var(--line)}
+.notice.warn{background:var(--warn-soft);border-color:var(--warn)}
+.notice.bad{background:var(--bad-soft);border-color:var(--bad)}
+.banner p,.notice p{flex:1 1 240px;min-width:0}
+
+/* buttons */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.primary{width:100%;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:20px;padding:22px 16px;font-variation-settings:"wdth" 112;letter-spacing:.01em;touch-action:manipulation}
+.primary:disabled{opacity:.5}
+.primary.ghost{background:var(--ink);color:var(--bg)}
+.primary.huge{padding:56px 16px;font-size:26px}
+.row{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
+.row.spread{justify-content:space-between}
+
+/* segmented */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:9px 14px;font-weight:600;font-size:14px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg.sm button{padding:5px 10px;font-size:13px}
+.seg.full{display:flex}.seg.full button{flex:1}
+
+/* readout */
+.readout{gap:14px}
+.ro-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ro-head b{font-size:22px;font-weight:800;font-variation-settings:"wdth" 112}
+.ro-big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:clamp(52px,17vw,88px);font-weight:500;line-height:1;letter-spacing:-.03em;display:flex;align-items:flex-start;gap:4px}
+.ro-big .u{font-size:.45em;color:var(--muted);margin-top:.12em}
+.ro-meta{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:var(--sunk);color:var(--muted)}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.stepper{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.stepper button{border:0;background:var(--sunk);width:44px;font-size:20px;font-weight:700}
+.stepper input{width:84px;border:0;text-align:center;background:var(--surface);font-family:var(--mono);font-size:17px;padding:8px 4px}
+.stepper span{align-self:center;padding:0 10px 0 0;color:var(--muted);font-size:13px;background:var(--surface)}
+
+/* fields */
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 16px}
+.field{display:grid;gap:5px;min-width:0}
+.field label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.field input[type=text],.field select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:10px 12px;font-size:16px}
+.field input.len{font-family:var(--mono)}
+.field .hint{font-size:12px;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.check input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--accent);flex:none}
+
+/* tables */
+.tablewrap{overflow-x:auto;margin-inline:-4px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:right;font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td input{width:86px;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:5px 6px;text-align:right;font-family:var(--mono);font-size:14px}
+td .x{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);vertical-align:middle}
+.dot.warn{background:var(--warn)}
+.pos{color:var(--ink)} .tag-good{color:var(--good)} .tag-warn{color:var(--warn)} .tag-bad{color:var(--bad);font-weight:600}
+
+/* results */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:4px;align-content:start}
+.tile .k{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tile .v{font-family:var(--mono);font-size:26px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
+.tile .v small{font-size:13px;color:var(--muted);margin-left:3px}
+.tile .d{font-size:12px;color:var(--muted)}
+.tile.lead{border-color:var(--accent);background:linear-gradient(var(--accent-soft),var(--surface) 70%)}
+.res-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.res-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
+.plot{width:100%;min-height:180px}
+.plot svg,#devChart svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:18px;height:0;border-top:2.5px solid;vertical-align:middle;margin-right:6px}
+.svg-txt{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+.svg-lbl{font-family:var(--display);font-size:11px;font-weight:700;fill:var(--ink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-family:var(--mono)}
+.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+
+details.howto{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px}
+details.howto summary{font-weight:700;cursor:pointer}
+details.howto ol{margin:10px 0 2px;padding-left:20px;display:grid;gap:6px;font-size:14px}
+
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;max-width:calc(100% - 32px);z-index:20;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.on{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(10,14,18,.5);display:grid;place-items:center;padding:16px;z-index:30}
+.modal .card{max-width:420px;width:100%}
+textarea#dxfText{width:100%;height:180px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);padding:8px}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="8" fill="var(--ink)"/><path d="M7 25 A16 16 0 0 1 27 25" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/><circle cx="7" cy="25" r="2.2" fill="var(--bg)"/><circle cx="17" cy="15.6" r="2.2" fill="var(--bg)"/><circle cx="27" cy="25" r="2.2" fill="var(--bg)"/></svg>
+      <div style="min-width:0"><h1>Wall Arc Tracer</h1><p class="sub" id="jobLine">—</p></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" id="t-trace" data-tab="trace" aria-selected="true">Trace</button>
+      <button role="tab" id="t-results" data-tab="results" aria-selected="false">Results</button>
+      <button role="tab" id="t-setup" data-tab="setup" aria-selected="false">Setup</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="banner" id="exampleBanner" hidden>
+    <p><b>Example data.</b> This is a sample 13 ft trace against a 189" design radius, so you can see the results. It isn't a real measurement.</p>
+    <button class="btn accent" id="btnNew">Start a new trace</button>
+  </div>
+
+  <!-- TRACE -->
+  <section id="tab-trace" role="tabpanel" aria-labelledby="t-trace">
+    <div class="seg full" id="methodSeg" role="group" aria-label="Method">
+      <button data-m="sensor" aria-pressed="true">Phone sensors</button>
+      <button data-m="string" aria-pressed="false">String line</button>
+    </div>
+
+    <div id="sensorPane" style="display:grid;gap:14px">
+      <div class="seg full" id="sensorModeSeg" role="group" aria-label="How to move along the wall">
+        <button data-sm="stations" aria-pressed="true">Stations</button>
+        <button data-sm="sweep" aria-pressed="false">Continuous</button>
+      </div>
+      <div class="notice bad" id="sensorNotice" hidden><p id="sensorNoticeText"></p></div>
+      <div class="notice warn" id="relinkBanner" hidden>
+        <p id="relinkText">The phone's heading reference was reset. Put the phone back on the last recorded station and tap Re-link before you continue.</p>
+      </div>
+
+      <div class="card readout">
+        <div class="ro-head">
+          <b id="roStation">Station 0</b>
+          <span class="num muted" id="roDist">0" along face</span>
+        </div>
+        <div class="ro-big" aria-live="off"><span id="roHeading">--.--</span><span class="u">°</span></div>
+        <div class="ro-meta">
+          <span class="chip" id="roSteady">Sensors off</span>
+          <span id="roDelta">Turn since last station: —</span>
+          <span id="roTilt">Pitch —</span>
+        </div>
+        <button class="primary" id="btnUseString" hidden>Use the String line method here</button>
+        <button class="primary" id="btnSensors">Start sensors</button>
+        <button class="primary" id="btnRecord" hidden>Record station 0</button>
+        <button class="primary ghost" id="btnRelink" hidden>Re-link at station 0</button>
+        <button class="primary" id="btnSweepStart" hidden>Start sweep</button>
+        <button class="primary huge" id="btnMark" hidden>Mark 1</button>
+        <button class="primary ghost" id="btnStop" hidden>Stop</button>
+        <div class="row spread">
+          <label for="nextSpacing" class="small muted" id="spLabel">Distance to next station</label>
+          <div class="stepper">
+            <button id="spMinus" aria-label="Decrease spacing by 1 inch">−</button>
+            <input id="nextSpacing" type="text" inputmode="decimal" autocomplete="off" value="12">
+            <span>in</span>
+            <button id="spPlus" aria-label="Increase spacing by 1 inch">+</button>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnUndo">Undo last station</button>
+          <button class="btn" id="btnClose" title="Return to station 0 and record it again to measure drift">Close check at station 0</button>
+          <button class="btn" id="btnSweepClose" hidden title="Put the phone back at the start mark to measure drift">Close check at start</button>
+        </div>
+      </div>
+
+      <div class="card" id="sweepCard" hidden>
+        <div class="card-head"><h2>Recorded sweep</h2><span class="small muted num" id="swInfo"></span></div>
+        <div class="tablewrap"><table id="swTable"></table></div>
+        <p class="small muted">Speed between marks shows a missed or double tap. A missed mark shows about half your usual speed; a double tap shows a very high one. Editing a distance shifts every mark after it by the same amount. Deleting a mark pulls the later marks back by one gap.</p>
+        <div class="row"><button class="btn" id="btnSweepDiscard">Discard sweep</button></div>
+      </div>
+
+      <details class="howto" id="howtoSweep" hidden>
+        <summary>How to trace continuously</summary>
+        <ol>
+          <li>Mark the wall face with a tape at even spacing, e.g. every 12", measured along the curve. Set that spacing below.</li>
+          <li>Hold the phone screen-up with its <b>long edge pressed flat on the wall</b>, top pointing along the wall. Pick one spot on the phone, like its back corner, to line up with the marks.</li>
+          <li>Tap <b>Start sensors</b>, put that spot on the first mark, tap <b>Start sweep</b> and hold still until the beep.</li>
+          <li>Slide the phone steadily, about a foot every two seconds, keeping the edge on the wall. Each time your spot passes a mark, tap the big <b>Mark</b> button with your other hand.</li>
+          <li>Tap <b>Stop</b> as the spot reaches the last mark. If you stopped somewhere else, fix the stop distance in the sweep table.</li>
+          <li>Optional: put the phone back on the start mark and tap <b>Close check at start</b> to take out gyro drift.</li>
+        </ol>
+      </details>
+
+      <details class="howto" id="howto">
+        <summary>How to trace a wall</summary>
+        <ol>
+          <li>Mark stations along the wall face with a tape, e.g. every 12". Measure <b>along the face</b>, following the curve.</li>
+          <li>Hold the phone screen-up with its <b>long edge pressed flat on the wall</b>, top of the phone pointing along the wall. Keep the same edge on the wall and the top pointing the same way at every station.</li>
+          <li>Tap <b>Start sensors</b>. Put the phone on station 0, let the chip turn to <i>Steady</i>, then tap <b>Record</b>. Wait for the beep before you move it.</li>
+          <li>Move to each mark and record. If a mark isn't at the default spacing, change the distance before you record.</li>
+          <li>When you're done, go back to station 0 and tap <b>Close check</b>. This measures gyro drift so it can be taken out of the trace.</li>
+          <li>On Results, enter a taped chord from first to last station to check or correct the trace.</li>
+        </ol>
+      </details>
+
+      <div class="card">
+        <div class="card-head"><h2>Trace so far</h2><span class="small muted num" id="miniInfo"></span></div>
+        <div class="plot" id="miniPlot"></div>
+      </div>
+
+      <div class="card" id="stCard">
+        <div class="card-head"><h2>Recorded stations</h2><span class="small muted" id="stCount"></span></div>
+        <div class="tablewrap"><table id="stTable"></table></div>
+      </div>
+    </div>
+
+    <div id="stringPane" hidden style="display:grid;gap:14px">
+      <div class="card">
+        <h2>Offsets from a string line</h2>
+        <p class="small">Use this when sensors aren't available, or as an independent check. Stretch a string past both ends of the curve, on equal blocks if the face bulges toward you. Measure square from the string to the wall face at each point along the string.</p>
+        <div class="tablewrap"><table id="strTable"></table></div>
+        <div class="row"><button class="btn" id="btnAddRow">Add offset</button><span class="small muted">Distances are along the string, offsets are string to face. Inches; fractions like 3 7/16 or feet like 12' 6" are fine.</span></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Shape from offsets</h2><span class="small muted num" id="miniInfo2"></span></div>
+        <div class="plot" id="miniPlot2"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="tab-results" role="tabpanel" aria-labelledby="t-results" hidden>
+    <div class="notice warn" id="resNotice" hidden><p id="resNoticeText"></p></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="res-grid">
+      <div class="card">
+        <div class="card-head">
+          <h2>Plan</h2>
+          <div class="seg sm" id="exagSeg" role="group" aria-label="Exaggerate deviations">
+            <button data-x="1" aria-pressed="true">True</button><button data-x="10" aria-pressed="false">×10</button><button data-x="50" aria-pressed="false">×50</button>
+          </div>
+        </div>
+        <div class="plot" id="plot"></div>
+        <div class="legend">
+          <span><i style="border-color:var(--trace)"></i>Traced face</span>
+          <span><i style="border-color:var(--accent);border-top-style:dashed"></i>Best-fit arc</span>
+          <span><i style="border-color:var(--design);border-top-style:dotted"></i>Design arc</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="devTitle">Deviation from design arc</h2>
+        <div id="devChart"></div>
+        <p class="small muted">+ means the face is outside the arc (farther from its center), − means inside. The shaded band is your tolerance.</p>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="card" id="tapeCard">
+        <h2>Tape check</h2>
+        <div class="fields">
+          <div class="field"><label for="chordIn">Taped chord, start to end</label><input id="chordIn" class="len" type="text" autocomplete="off" placeholder="e.g. 151 9/16"></div>
+          <div class="field"><label for="riseIn">Taped rise at mid-chord</label><input id="riseIn" class="len" type="text" autocomplete="off" placeholder="optional, e.g. 15 3/4"></div>
+        </div>
+        <dl class="kv" id="tapeKv"></dl>
+        <label class="check"><input type="checkbox" id="useChord"><span>Correct the trace so its chord matches the taped chord. This scales the turn at every station by the same factor.</span></label>
+        <label class="check"><input type="checkbox" id="useDrift"><span id="driftLbl">Take out gyro drift using the close check</span></label>
+      </div>
+      <div class="card">
+        <h2>Export to AutoCAD</h2>
+        <p class="small">DXF in inches. Station 0 is at 0,0 and the chord runs along +X. Layers: <span class="mono">TRACE</span> polyline, <span class="mono">FIT_ARC</span>, <span class="mono">DESIGN_ARC</span>, <span class="mono">STATIONS</span> with deviation labels, <span class="mono">CENTER</span>, <span class="mono">NOTES</span>.</p>
+        <div class="row">
+          <button class="btn accent" id="btnDxf">Save DXF</button>
+          <button class="btn" id="btnCopy">Copy DXF text</button>
+        </div>
+        <p class="small muted" id="dxfNote"></p>
+        <textarea id="dxfText" hidden readonly aria-label="DXF text"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Stations</h2><span class="small muted" id="resCount"></span></div>
+      <div class="tablewrap"><table id="resTable"></table></div>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section id="tab-setup" role="tabpanel" aria-labelledby="t-setup" hidden>
+    <div class="card">
+      <h2>Job</h2>
+      <div class="fields">
+        <div class="field"><label for="fJob">Project</label><input id="fJob" type="text" autocomplete="off"></div>
+        <div class="field"><label for="fWall">Wall / location</label><input id="fWall" type="text" autocomplete="off" placeholder="e.g. Grid C / 4–7, L2 slab edge"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Design and tolerance</h2>
+      <div class="fields">
+        <div class="field"><label for="fR">Design radius</label><input id="fR" class="len" type="text" autocomplete="off" placeholder="e.g. 189 or 15' 9&quot;"><span class="hint">Radius of the face you're tracing, in inches. Leave blank if unknown.</span></div>
+        <div class="field"><label for="fTol">Tolerance ±</label><input id="fTol" class="len" type="text" autocomplete="off" placeholder="e.g. 1/4"><span class="hint">Inches. Deviations beyond this are flagged.</span></div>
+        <div class="field"><label for="fSp">Default station spacing</label><input id="fSp" class="len" type="text" autocomplete="off" placeholder="e.g. 12"><span class="hint">Inches along the face.</span></div>
+      </div>
+      <div class="field"><label>Show inches as</label>
+        <div class="seg" id="fmtSeg" role="group" aria-label="Show inches as">
+          <button data-f="frac" aria-pressed="true">Fractions to 1/16"</button><button data-f="dec" aria-pressed="false">Decimal</button>
+        </div>
+        <span class="hint">You can type either form in any box, including feet: 15' 9 3/8".</span>
+      </div>
+      <div class="field"><label>Place the design arc</label>
+        <div class="seg" id="alignSeg" role="group" aria-label="Place the design arc">
+          <button data-a="ends" aria-pressed="true">Through end stations</button><button data-a="best" aria-pressed="false">Best fit</button>
+        </div>
+        <span class="hint">Through ends: the design arc passes through the first and last station, like a site check from the ends. Best fit: it is moved to sit as close as possible to every station.</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Data</h2>
+      <p class="small muted">Your trace is kept in this browser on this device only. Export a DXF to keep a copy.</p>
+      <div class="row"><button class="btn" id="btnClear">Clear all trace data</button></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div class="modal" id="confirmDlg" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
+    <h3 id="cfTitle" style="font-size:18px">Clear the trace?</h3>
+    <p class="small" id="cfText"></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="cfNo">Keep it</button><button class="btn accent" id="cfYes">Clear</button></div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ============ geometry core ============ */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const wrapPi = a => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
+const sinc = x => Math.abs(x) < 1e-9 ? 1 : Math.sin(x) / x;
+const hyp = Math.hypot;
+
+// Heading (rad, CCW from east) of the phone's long axis projected on the horizontal plane.
+// W3C DeviceOrientation: R = Rz(alpha)·Rx(beta)·Ry(gamma); device +Y in earth frame = (-sinA·cosB, cosA·cosB, sinB).
+// Independent of gamma, so the phone can be rolled toward you without changing the reading.
+function headingFromEuler(alpha, beta) {
+  const A = alpha * D2R, cB = Math.cos(beta * D2R);
+  return Math.atan2(Math.cos(A) * cB, -Math.sin(A) * cB);
+}
+
+// Relative tangent headings for the sensor stations, with frame re-links and optional drift removal.
+function sensorThetas(S, useDrift) {
+  const st = S.stations, out = [];
+  let prev = 0;
+  for (let i = 0; i < st.length; i++) {
+    const off = S.frames[st[i].frame];
+    let th = wrapPi(st[i].psi + (off == null ? 0 : off));
+    th = i === 0 ? th : prev + wrapPi(th - prev);
+    out.push(th); prev = th;
+  }
+  let drift = null;
+  if (S.closure && st.length > 1 && S.frames[S.closure.frame] != null) {
+    const thc = wrapPi(S.closure.psi + S.frames[S.closure.frame] - out[0]);
+    const dt = S.closure.t - st[0].t;
+    drift = { deg: thc * R2D, sec: dt / 1000 };
+    if (useDrift && dt > 0) {
+      const rate = thc / dt;
+      for (let i = 0; i < out.length; i++) out[i] -= rate * (st[i].t - st[0].t);
+    }
+  }
+  const t0 = out[0] || 0;
+  return { th: out.map(t => t - t0), drift };
+}
+
+// Continuous sweep → heading on an even distance grid.
+// Time maps to distance piecewise-linearly through the start, each tapped mark and the stop,
+// so speed only has to be steady between neighbouring marks. Readings are averaged per grid bin.
+function sweepSeries(W, useDrift) {
+  if (!(W.stop && W.stop.s > 0)) return { err: "Enter the distance along the face where the sweep stopped (in the sweep table)." };
+  const A = [{ t: 0, s: 0 }, ...W.marks, W.stop];
+  for (let i = 1; i < A.length; i++) {
+    if (!(A[i].s > A[i - 1].s)) return { err: `Mark distances must increase along the wall. Check ${i === A.length - 1 ? "the stop distance" : "mark " + i}.` };
+    if (!(A[i].t > A[i - 1].t)) return { err: "Two marks were tapped at the same moment. Delete one of them." };
+  }
+  const n = W.t.length;
+  if (n < 20) return { err: "The sweep is too short to use. Record it again." };
+  const th = new Float64Array(n);
+  let prev = 0;
+  for (let i = 0; i < n; i++) { const r = wrapPi(W.psi[i] - W.psi0); prev = i ? prev + wrapPi(r - prev) : r; th[i] = prev; }
+  let drift = null;
+  if (W.closure && W.closure.t > 0) {
+    const thc = wrapPi(W.closure.psi - W.psi0);
+    drift = { deg: thc * R2D, sec: W.closure.t / 1000 };
+    if (useDrift) { const rate = thc / W.closure.t; for (let i = 0; i < n; i++) th[i] -= rate * W.t[i]; }
+  }
+  const L = W.stop.s, N = Math.max(8, Math.round(L / Math.min(1, Math.max(0.25, L / 400)))), step = L / N;
+  const sum = new Float64Array(N), cnt = new Uint32Array(N);
+  let a = 0;
+  for (let i = 0; i < n; i++) {
+    const t = W.t[i];
+    if (t < 0 || t > W.stop.t) continue;
+    while (a < A.length - 2 && t > A[a + 1].t) a++;
+    const s = A[a].s + (A[a + 1].s - A[a].s) * (t - A[a].t) / (A[a + 1].t - A[a].t);
+    const b = Math.min(N - 1, Math.max(0, Math.floor(s / step)));
+    sum[b] += th[i]; cnt[b]++;
+  }
+  const known = [];
+  for (let b = 0; b < N; b++) if (cnt[b]) known.push([(b + 0.5) * step, sum[b] / cnt[b]]);
+  if (known.length < Math.max(4, N * 0.3)) return { err: "Too few readings along the sweep. Slide more slowly and record it again." };
+  const gs = [], gth = [];
+  let k = 0;
+  for (let j = 0; j <= N; j++) {
+    const s = j * step;
+    let v;
+    if (s <= known[0][0]) v = known[0][1];
+    else if (s >= known[known.length - 1][0]) v = known[known.length - 1][1];
+    else { while (k < known.length - 2 && s > known[k + 1][0]) k++; const [s0, v0] = known[k], [s1, v1] = known[k + 1]; v = v0 + (v1 - v0) * (s - s0) / (s1 - s0); }
+    gs.push(s); gth.push(v);
+  }
+  const t0 = gth[0];
+  return { s: gs, th: gth.map(v => v - t0), drift, step, gaps: N - known.length };
+}
+
+// Chain tangents into points. Between stations the face is treated as a circular arc of length ds,
+// so the chord is ds·sinc(Δθ/2) along the mean tangent.
+function integrate(s, th) {
+  const pts = [{ x: 0, y: 0 }];
+  for (let i = 1; i < s.length; i++) {
+    const ds = s[i] - s[i - 1], dth = th[i] - th[i - 1], mid = th[i - 1] + dth / 2, c = ds * sinc(dth / 2);
+    const p = pts[i - 1];
+    pts.push({ x: p.x + c * Math.cos(mid), y: p.y + c * Math.sin(mid) });
+  }
+  return pts;
+}
+
+// Rotate so station 0 is at the origin and the chord runs along +X.
+function toChordFrame(pts) {
+  const a = pts[0], b = pts[pts.length - 1], ang = Math.atan2(b.y - a.y, b.x - a.x);
+  const c = Math.cos(-ang), s = Math.sin(-ang);
+  return pts.map(p => ({ x: (p.x - a.x) * c - (p.y - a.y) * s, y: (p.x - a.x) * s + (p.y - a.y) * c }));
+}
+
+// Find k so that scaling every turn by k makes the traced chord equal the taped chord.
+function solveChordScale(s, th, C) {
+  const L = s[s.length - 1] - s[0];
+  const chordAt = k => { const p = integrate(s, th.map(t => t * k)); const q = p[p.length - 1]; return hyp(q.x, q.y); };
+  if (!(C > 0)) return { err: "Enter the taped chord." };
+  if (C > L + 0.02) return { err: `The taped chord (${fmtLen(C)}) is longer than the traced length along the face (${fmtLen(L)}). Check the station distances.` };
+  const c1 = chordAt(1);
+  if (L - c1 < 0.04) return { err: "The trace is almost straight, so the chord can't correct it. Use the rise instead." };
+  let lo = 0, hi = 1;
+  while (chordAt(hi) > C && hi < 8) hi *= 1.5;
+  if (chordAt(hi) > C) return { err: "The taped chord needs more curvature than makes sense. Check the readings." };
+  for (let i = 0; i < 70; i++) { const m = (lo + hi) / 2; if (chordAt(m) > C) lo = m; else hi = m; }
+  return { k: (lo + hi) / 2 };
+}
+
+// Radius from arc length and chord: C = 2R·sin(L/2R).
+function radiusFromArcChord(L, C) {
+  const r = C / L;
+  if (!(r > 0) || r >= 0.999999) return Infinity;
+  let lo = 1e-9, hi = Math.PI;
+  for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (Math.sin(m) / m > r) lo = m; else hi = m; }
+  return L / (2 * (lo + hi) / 2);
+}
+const radiusFromChordRise = (C, h) => (C * C) / (8 * h) + h / 2;
+
+function solve3(A, b) {
+  const M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < 3; c++) {
+    let p = c; for (let r = c + 1; r < 3; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    if (Math.abs(M[p][c]) < 1e-300) return null;
+    [M[c], M[p]] = [M[p], M[c]];
+    for (let r = 0; r < 3; r++) if (r !== c) { const f = M[r][c] / M[c][c]; for (let k = c; k < 4; k++) M[r][k] -= f * M[c][k]; }
+  }
+  return [M[0][3] / M[0][0], M[1][3] / M[1][1], M[2][3] / M[2][2]];
+}
+
+// Least-squares circle: algebraic start, then geometric Gauss-Newton refinement.
+function fitCircle(pts) {
+  const n = pts.length;
+  if (n < 3) return null;
+  let mx = 0, my = 0; pts.forEach(p => { mx += p.x; my += p.y; }); mx /= n; my /= n;
+  let Suu = 0, Svv = 0, Suv = 0, Suuu = 0, Svvv = 0, Suvv = 0, Svuu = 0;
+  pts.forEach(p => { const u = p.x - mx, v = p.y - my; Suu += u * u; Svv += v * v; Suv += u * v; Suuu += u * u * u; Svvv += v * v * v; Suvv += u * v * v; Svuu += v * u * u; });
+  const det = Suu * Svv - Suv * Suv;
+  if (Math.abs(det) < 1e-12 * (Suu * Suu + Svv * Svv + 1)) return { straight: true };
+  const bu = 0.5 * (Suuu + Suvv), bv = 0.5 * (Svvv + Svuu);
+  let cx = (bu * Svv - bv * Suv) / det, cy = (Suu * bv - Suv * bu) / det;
+  let R = Math.sqrt(cx * cx + cy * cy + (Suu + Svv) / n);
+  cx += mx; cy += my;
+  if (!isFinite(R) || R > 1e8) return { straight: true };
+  for (let it = 0; it < 30; it++) {
+    const JtJ = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], Jtr = [0, 0, 0];
+    for (const p of pts) {
+      const dx = p.x - cx, dy = p.y - cy, d = hyp(dx, dy) || 1e-9, r = d - R;
+      const J = [-dx / d, -dy / d, -1];
+      for (let a = 0; a < 3; a++) { Jtr[a] += J[a] * r; for (let b = 0; b < 3; b++) JtJ[a][b] += J[a] * J[b]; }
+    }
+    const step = solve3(JtJ, Jtr.map(v => -v));
+    if (!step) break;
+    cx += step[0]; cy += step[1]; R += step[2];
+    if (Math.abs(step[0]) + Math.abs(step[1]) + Math.abs(step[2]) < 1e-7) break;
+  }
+  if (!isFinite(R) || R <= 0 || R > 1e8) return { straight: true };
+  const res = pts.map(p => hyp(p.x - cx, p.y - cy) - R);
+  return { cx, cy, R, res, rms: Math.sqrt(res.reduce((a, r) => a + r * r, 0) / n) };
+}
+
+// Place a circle of fixed radius R: through the end points, optionally moved to best fit.
+function placeDesign(pts, R, mode, fit) {
+  const n = pts.length, A = pts[0], B = pts[n - 1];
+  const C = hyp(B.x - A.x, B.y - A.y);
+  if (C / 2 > R) return { err: `The design radius (${fmtLen(R)}) is smaller than half the traced chord (${fmtLen(C / 2)}). Check the design radius.` };
+  const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 }, ux = (B.x - A.x) / C, uy = (B.y - A.y) / C, nx = -uy, ny = ux;
+  const h = Math.sqrt(R * R - C * C / 4);
+  let side;
+  if (fit && !fit.straight) side = Math.sign((fit.cx - M.x) * nx + (fit.cy - M.y) * ny) || 1;
+  else { let b = 0; pts.forEach(p => b += (p.x - M.x) * nx + (p.y - M.y) * ny); side = b > 0 ? -1 : 1; }
+  let cx = M.x + side * h * nx, cy = M.y + side * h * ny;
+  if (mode === "best") {
+    for (let it = 0; it < 40; it++) {
+      let a11 = 0, a12 = 0, a22 = 0, g1 = 0, g2 = 0;
+      for (const p of pts) {
+        const dx = p.x - cx, dy = p.y - cy, d = hyp(dx, dy) || 1e-9, r = d - R, j1 = -dx / d, j2 = -dy / d;
+        a11 += j1 * j1; a12 += j1 * j2; a22 += j2 * j2; g1 += j1 * r; g2 += j2 * r;
+      }
+      const det = a11 * a22 - a12 * a12; if (Math.abs(det) < 1e-18) break;
+      const s1 = -(a22 * g1 - a12 * g2) / det, s2 = -(a11 * g2 - a12 * g1) / det;
+      cx += s1; cy += s2; if (Math.abs(s1) + Math.abs(s2) < 1e-7) break;
+    }
+  }
+  const dev = pts.map(p => hyp(p.x - cx, p.y - cy) - R);
+  return { cx, cy, R, dev };
+}
+
+// Angular span of the points around a center, as start angle + signed sweep (rad).
+function arcSpan(pts, cx, cy) {
+  const a0 = Math.atan2(pts[0].y - cy, pts[0].x - cx);
+  let sweep = 0, prev = a0;
+  for (let i = 1; i < pts.length; i++) { const a = Math.atan2(pts[i].y - cy, pts[i].x - cx); sweep += wrapPi(a - prev); prev = a; }
+  return { a0, sweep };
+}
+function arcPoints(cx, cy, R, a0, sweep, n = 96) {
+  const out = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + sweep * i / n; out.push({ x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }); }
+  return out;
+}
+
+/* ============ formatting ============ */
+function fmt(v, dp = 0) {
+  if (v == null || !isFinite(v)) return "—";
+  const neg = v < 0, s = Math.abs(v).toFixed(dp).split(".");
+  s[0] = s[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return (neg ? "−" : "") + s.join(".");
+}
+const sgn = (v, dp = 1) => (v > 0.00001 ? "+" : "") + fmt(v, dp);
+
+// All lengths are stored in inches. Display follows Setup: fractions to 1/16" or decimal.
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+function inchStr(v, signed) {
+  if (v == null || !isFinite(v)) return "—";
+  const frac = typeof state === "undefined" || !state || state.setup.fmt !== "dec";
+  let body, zero;
+  if (frac) {
+    const n = Math.round(Math.abs(v) * 16), w = Math.floor(n / 16), r = n % 16, g = gcd(r, 16);
+    zero = n === 0;
+    body = (w || !r ? w.toLocaleString("en-US") : "") + (w && r ? " " : "") + (r ? `${r / g}/${16 / g}` : "");
+  } else {
+    const dp = signed ? 3 : 2, t = Math.abs(v).toFixed(dp);
+    zero = +t === 0;
+    body = Number(t).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  }
+  return (zero ? "" : v < 0 ? "−" : signed ? "+" : "") + body + '"';
+}
+const fmtLen = v => inchStr(v, false);
+const sgnLen = v => inchStr(v, true);
+const inVal = v => v == null || !isFinite(v) ? "" : fmtLen(v).replace(/"$/, "").replace("−", "-");
+
+// Accepts 12 · 12.5 · 12 1/2 · 12-1/2 · 1/2 · 15' · 15'-9 3/8" · 15' 9-3/8 · 189in · -1/8
+function parseLen(str) {
+  if (str == null) return null;
+  let s = String(str).trim().toLowerCase().replace(/[″”“]/g, '"').replace(/[′’‘]/g, "'").replace(/[−–]/g, "-").replace(/,/g, "");
+  if (!s) return null;
+  let neg = false;
+  if (s[0] === "-") { neg = true; s = s.slice(1).trim(); }
+  let ft = 0, m = s.match(/^(\d*\.?\d+)\s*(?:'|ft|feet|foot)\s*-?\s*(.*)$/);
+  if (m) { ft = parseFloat(m[1]); s = m[2].trim(); }
+  s = s.replace(/\s*(?:"|in|inch|inches)$/, "").trim();
+  let inch = 0;
+  if (s) {
+    if ((m = s.match(/^\d*\.?\d+$/))) inch = parseFloat(s);
+    else if ((m = s.match(/^(?:(\d+)(?:\s+|\s*-\s*))?(\d+)\s*\/\s*(\d+)$/))) {
+      if (+m[3] === 0) return null;
+      inch = (m[1] ? +m[1] : 0) + (+m[2]) / (+m[3]);
+    } else return null;
+  }
+  const v = (ft * 12 + inch) * (neg ? -1 : 1);
+  return isFinite(v) ? v : null;
+}
+
+/* ============ DXF (R12 ASCII, inches) ============ */
+function buildDxf(m, meta) {
+  const L = [];
+  const g = (c, v) => { L.push(String(c)); L.push(typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(4)) : String(v)); };
+  const layers = [["TRACE", 5], ["FIT_ARC", 30], ["DESIGN_ARC", 6], ["STATIONS", 7], ["CENTER", 8], ["NOTES", 7]];
+  const pts = m.pts;
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  pts.forEach(p => { minx = Math.min(minx, p.x); miny = Math.min(miny, p.y); maxx = Math.max(maxx, p.x); maxy = Math.max(maxy, p.y); });
+  const span = Math.max(maxx - minx, maxy - miny, 4);
+  const th = Math.max(0.375, Math.round(span / 90 * 8) / 8);
+
+  g(0, "SECTION"); g(2, "HEADER");
+  g(9, "$ACADVER"); g(1, "AC1009");
+  g(9, "$INSBASE"); g(10, 0); g(20, 0); g(30, 0);
+  g(9, "$EXTMIN"); g(10, minx); g(20, miny - span * 0.2); g(30, 0);
+  g(9, "$EXTMAX"); g(10, maxx); g(20, maxy + span * 0.2); g(30, 0);
+  g(0, "ENDSEC");
+  g(0, "SECTION"); g(2, "TABLES");
+  g(0, "TABLE"); g(2, "LTYPE"); g(70, 1);
+  g(0, "LTYPE"); g(2, "CONTINUOUS"); g(70, 0); g(3, "Solid line"); g(72, 65); g(73, 0); g(40, 0);
+  g(0, "ENDTAB");
+  g(0, "TABLE"); g(2, "LAYER"); g(70, layers.length);
+  layers.forEach(([n, c]) => { g(0, "LAYER"); g(2, n); g(70, 0); g(62, c); g(6, "CONTINUOUS"); });
+  g(0, "ENDTAB");
+  g(0, "ENDSEC");
+
+  g(0, "SECTION"); g(2, "ENTITIES");
+  g(0, "POLYLINE"); g(8, "TRACE"); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, 0);
+  (m.line || pts).forEach(p => { g(0, "VERTEX"); g(8, "TRACE"); g(10, p.x); g(20, p.y); g(30, 0); });
+  g(0, "SEQEND"); g(8, "TRACE");
+
+  const arc = (layer, cx, cy, R) => {
+    const sp = arcSpan(pts, cx, cy);
+    let a = sp.a0 * R2D, b = (sp.a0 + sp.sweep) * R2D;
+    if (sp.sweep < 0) [a, b] = [b, a];
+    a = ((a % 360) + 360) % 360; b = ((b % 360) + 360) % 360;
+    g(0, "ARC"); g(8, layer); g(10, cx); g(20, cy); g(30, 0); g(40, R); g(50, a); g(51, b);
+  };
+  const text = (layer, x, y, h, s) => { g(0, "TEXT"); g(8, layer); g(10, x); g(20, y); g(30, 0); g(40, h); g(1, String(s).replace(/−/g, "-").replace(/[^\x20-\x7E]/g, "-")); };
+
+  if (m.fit && !m.fit.straight) {
+    arc("FIT_ARC", m.fit.cx, m.fit.cy, m.fit.R);
+    const k = th * 2;
+    g(0, "LINE"); g(8, "CENTER"); g(10, m.fit.cx - k); g(20, m.fit.cy); g(30, 0); g(11, m.fit.cx + k); g(21, m.fit.cy); g(31, 0);
+    g(0, "LINE"); g(8, "CENTER"); g(10, m.fit.cx); g(20, m.fit.cy - k); g(30, 0); g(11, m.fit.cx); g(21, m.fit.cy + k); g(31, 0);
+    text("CENTER", m.fit.cx + k, m.fit.cy + k, th, `FIT CENTER  R=${fmtLen(m.fit.R)}`);
+  }
+  if (m.design && !m.design.err) arc("DESIGN_ARC", m.design.cx, m.design.cy, m.design.R);
+
+  // station markers + labels, offset away from the fitted center (or to +Y if straight)
+  pts.forEach((p, i) => {
+    g(0, "POINT"); g(8, "STATIONS"); g(10, p.x); g(20, p.y); g(30, 0);
+    let ox = 0, oy = 1;
+    const ref = m.fit && !m.fit.straight ? m.fit : null;
+    if (ref) { const d = hyp(p.x - ref.cx, p.y - ref.cy) || 1; ox = (p.x - ref.cx) / d; oy = (p.y - ref.cy) / d; if (m.labelInside) { ox = -ox; oy = -oy; } }
+    const dv = m.devRef ? m.devRef[i] : null;
+    const lbl = `S${i}` + (dv != null ? ` ${sgnLen(dv)}` : "");
+    text("STATIONS", p.x + ox * th * 1.6, p.y + oy * th * 1.6, th * 0.8, lbl);
+  });
+
+  const notes = [
+    `${meta.job || "Wall arc trace"}${meta.wall ? " - " + meta.wall : ""}`,
+    `Traced ${meta.date}  method: ${meta.method}  units: inches`,
+    m.fit && !m.fit.straight ? `Best-fit R=${fmtLen(m.fit.R)}  RMS=${m.fit.rms.toFixed(3)}"` : "Best fit: straight",
+    m.design && !m.design.err ? `Design R=${fmtLen(m.design.R)} (${meta.align})  max dev ${sgnLen(m.maxDev)}  tol +/-${fmtLen(meta.tol)}` : "No design radius",
+    `Arc ${fmtLen(m.L)}  chord ${fmtLen(m.C)}  rise ${fmtLen(m.rise)}`,
+    `Station labels: deviation from ${m.design && !m.design.err ? "design" : "best-fit"} arc, + = outside arc`
+  ];
+  const ny = Math.min(miny, 0) - span * 0.12;
+  notes.forEach((s, i) => text("NOTES", minx, ny - i * th * 1.7, th, s));
+  g(0, "ENDSEC");
+  g(0, "EOF");
+  return L.join("\r\n") + "\r\n";
+}
+
+/* ============ single-file stored zip (for viewers that only accept .zip) ============ */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipOne(name, text) {
+  const enc = new TextEncoder(), data = enc.encode(text), nm = enc.encode(name), crc = crc32(data);
+  const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  const buf = new Uint8Array(30 + nm.length + data.length + 46 + nm.length + 22), v = new DataView(buf.buffer);
+  let o = 0;
+  const u32 = x => { v.setUint32(o, x, true); o += 4; }, u16 = x => { v.setUint16(o, x, true); o += 2; };
+  u32(0x04034b50); u16(20); u16(0); u16(0); u16(time); u16(date); u32(crc); u32(data.length); u32(data.length); u16(nm.length); u16(0);
+  buf.set(nm, o); o += nm.length; buf.set(data, o); o += data.length;
+  const cd = o;
+  u32(0x02014b50); u16(20); u16(20); u16(0); u16(0); u16(time); u16(date); u32(crc); u32(data.length); u32(data.length); u16(nm.length); u16(0); u16(0); u16(0); u16(0); u32(0); u32(0);
+  buf.set(nm, o); o += nm.length;
+  const cdSize = o - cd;
+  u32(0x06054b50); u16(0); u16(0); u16(1); u16(1); u32(cdSize); u32(cd); u16(0);
+  return buf;
+}
+
+/* ============ state ============ */
+const KEY = "wallArcTracer.v1";
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function blankState() {
+  return {
+    v: 2, example: false, method: "sensor", sensorMode: "stations", sweep: null, tab: "trace", exag: 1, nextSp: 12,
+    setup: { job: "", wall: "", R: null, tol: 0.25, sp: 12, align: "ends", fmt: "frac" },
+    sensor: { stations: [], frames: {}, closure: null, useDrift: true, useChord: false, chord: null, rise: null },
+    string: { rows: [] }
+  };
+}
+
+// Sample data, generated rather than measured: a 13 ft face at R 188.4" with a small bump at S8,
+// read against a 189" design, with 0.35° of gyro drift that the close check removes.
+function exampleState() {
+  const S = blankState();
+  S.example = true;
+  S.setup = { job: "Example: L2 curved storefront", wall: "Grid C / 4–7, sill line", R: 189, tol: 0.25, sp: 12, align: "ends", fmt: "frac" };
+  const Rt = 188.4, t0 = Date.now() - 240000, base = 0.6, tClose = t0 + 13 * 11000 + 45000, rate = 0.35 * D2R / (tClose - t0);
+  for (let i = 0; i <= 13; i++) {
+    const s = i * 12, t = t0 + i * 11000;
+    const th = s / Rt + (0.05 * Math.sin(i * 1.9) + (i === 8 ? 0.1 : 0)) * D2R;
+    S.sensor.stations.push({ s, psi: wrapPi(th + base + rate * (t - t0)), frame: "ex", t, sd: i === 8 ? 0.31 : 0.04 });
+  }
+  S.sensor.frames = { ex: -base };
+  S.sensor.closure = { psi: wrapPi(base + rate * (tClose - t0)), frame: "ex", t: tClose, sd: 0.05 };
+  S.sensor.chord = Math.round(2 * Rt * Math.sin(156 / (2 * Rt)) * 16) / 16;
+  const Rs = 188.75, half = 72, sag0 = Math.sqrt(Rs * Rs - half * half);
+  for (let x = 0; x <= 144; x += 12) {
+    const o = Math.sqrt(Rs * Rs - (x - half) ** 2) - sag0 + (x === 96 ? 1 / 16 : 0);
+    S.string.rows.push({ x, o: Math.round(o * 16) / 16 });
+  }
+  S.sweep = exampleSweep();
+  return S;
+}
+
+// Sample continuous sweep: same 13 ft face, slid at an uneven 4.6–7.4 in/s, read at 60 Hz,
+// with a mark tapped at every 12" and a small local bump near 96".
+function exampleSweep() {
+  const Rt = 188.4, L = 156, sp = 12, dt = 1000 / 60, psi0 = 1.1, t = [], psi = [], marks = [];
+  let s = 0, time = 0, i = 0, next = sp;
+  while (s < L) {
+    const th = s / Rt + (0.15 * Math.exp(-(((s - 96) / 5) ** 2)) + 0.04 * Math.sin(i * 0.9) + 0.02 * Math.sin(i * 2.7)) * D2R;
+    t.push(Math.round(time)); psi.push(+wrapPi(psi0 + th).toFixed(5));
+    const s2 = s + (6 + 1.4 * Math.cos(time / 1000 * 0.8)) * dt / 1000;
+    if (s2 >= next && next < L) { marks.push({ t: Math.round(time + dt), s: next }); next += sp; }
+    s = s2; time += dt; i++;
+  }
+  return { frame: "ex", goDate: Date.now() - 300000, psi0, sd: 0.03, t, psi, marks, stop: { t: Math.round(time), s: L }, sp, closure: null };
+}
+
+let state;
+try { const raw = localStorage.getItem(KEY); state = raw ? JSON.parse(raw) : null; } catch { state = null; }
+// Version 1 stored millimetres. Convert a real trace to inches; replace an old example with the new one.
+if (state && state.v === 1 && state.setup && state.sensor && state.string) {
+  if (state.example) state = null;
+  else {
+    const cv = x => x == null || !isFinite(x) ? x : x / 25.4;
+    ["R", "tol", "sp"].forEach(k => state.setup[k] = cv(state.setup[k]));
+    state.nextSp = cv(state.nextSp);
+    state.sensor.stations.forEach(p => p.s = cv(p.s));
+    state.sensor.chord = cv(state.sensor.chord); state.sensor.rise = cv(state.sensor.rise);
+    state.string.rows.forEach(r => { r.x = cv(r.x); r.o = cv(r.o); });
+    state.setup.fmt = "frac"; state.v = 2;
+  }
+}
+if (!state || state.v !== 2 || !state.sensor || !state.string || !state.setup) state = exampleState();
+if (!state.sensorMode) state.sensorMode = "stations";
+if (!("sweep" in state)) state.sweep = state.example ? exampleSweep() : null;
+let saveT = null;
+function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { } }, 150); }
+
+/* ============ model ============ */
+let model = { ok: false };
+function computeModel() {
+  const m = { ok: false, notes: [] };
+  let pts, s;
+  if (state.method === "sensor" && state.sensorMode === "sweep") {
+    const W = state.sweep;
+    if (!W) { m.msg = "No sweep recorded yet. Start sensors, put the phone on the first tape mark and tap Start sweep."; return m; }
+    const r = sweepSeries(W, state.sensor.useDrift);
+    if (r.err) { m.msg = r.err; return m; }
+    m.drift = r.drift;
+    const p1 = integrate(r.s, r.th), q = p1[p1.length - 1];
+    m.Craw = hyp(q.x, q.y);
+    let k = 1;
+    if (state.sensor.useChord) {
+      const c = solveChordScale(r.s, r.th, state.sensor.chord);
+      if (c.err) m.notes.push(c.err); else k = c.k;
+    }
+    const thk = r.th.map(t => t * k), dense = toChordFrame(integrate(r.s, thk)), L = r.s[r.s.length - 1], sp = W.sp > 0 ? W.sp : 12;
+    // report a station at every tape-mark spacing, plus the stop
+    s = []; for (let i = 0; i * sp < L - 0.01; i++) s.push(i * sp); s.push(L);
+    const lerp = (arr, v, f) => { const x = v / r.step, i = Math.min(arr.length - 2, Math.floor(x)), u = x - i; return f(arr[i], arr[i + 1], u); };
+    pts = s.map(v => lerp(dense, v, (a, b, u) => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u })));
+    m.th = s.map(v => lerp(thk, v, (a, b, u) => a + (b - a) * u));
+    m.k = k; m.line = dense; m.L = L; m.sweep = true;
+    if (!W.marks.length) m.notes.push("No marks were tapped, so distances assume you slid at a steady speed. Tap Mark at each tape mark for a better trace.");
+  } else if (state.method === "sensor") {
+    const st = state.sensor.stations;
+    if (st.length < 3) { m.msg = st.length ? `${st.length} station${st.length > 1 ? "s" : ""} recorded. Record at least 3 to see the shape.` : "No stations recorded yet. Start sensors and record station 0."; return m; }
+    s = st.map(p => p.s);
+    for (let i = 1; i < s.length; i++) if (!(s[i] > s[i - 1])) { m.msg = `Station distances must increase along the wall. Check S${i} (${fmtLen(s[i])}).`; return m; }
+    const { th, drift } = sensorThetas(state.sensor, state.sensor.useDrift);
+    m.drift = drift;
+    const p1 = integrate(s, th), q = p1[p1.length - 1];
+    m.Craw = hyp(q.x - p1[0].x, q.y - p1[0].y);
+    let k = 1;
+    if (state.sensor.useChord) {
+      const r = solveChordScale(s, th, state.sensor.chord);
+      if (r.err) m.notes.push(r.err); else k = r.k;
+    }
+    m.k = k; m.th = th.map(t => t * k);
+    pts = toChordFrame(integrate(s, m.th));
+    m.L = s[s.length - 1] - s[0];
+  } else {
+    const rows = state.string.rows.filter(r => isFinite(r.x) && isFinite(r.o) && r.x !== null && r.o !== null).slice().sort((a, b) => a.x - b.x);
+    if (rows.length < 3) { m.msg = "Enter at least 3 offsets to see the shape."; return m; }
+    s = rows.map(r => r.x);
+    pts = rows.map(r => ({ x: r.x, y: r.o }));
+    m.L = 0; for (let i = 1; i < pts.length; i++) m.L += hyp(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  }
+  m.s = s; m.pts = pts; m.n = pts.length; m.line = m.line || pts;
+  // A continuous sweep fits on the dense line; deviations are reported at the stations.
+  const ln = m.line, A = ln[0], B = ln[ln.length - 1], at = c => pts.map(p => hyp(p.x - c.cx, p.y - c.cy) - c.R);
+  m.C = hyp(B.x - A.x, B.y - A.y);
+  const ux = (B.x - A.x) / m.C, uy = (B.y - A.y) / m.C;
+  m.rise = 0; ln.forEach(p => { const d = Math.abs((p.x - A.x) * -uy + (p.y - A.y) * ux); if (d > m.rise) m.rise = d; });
+  m.fit = fitCircle(ln);
+  if (m.fit && !m.fit.straight) m.fit.res = at(m.fit);
+  const R = +state.setup.R;
+  if (R > 0) {
+    m.design = placeDesign(ln, R, state.setup.align, m.fit);
+    if (m.design.err) m.notes.push(m.design.err); else m.design.dev = at(m.design);
+  }
+  if (m.design && !m.design.err) { m.devRef = m.design.dev; m.devKind = "design"; }
+  else if (m.fit && !m.fit.straight) { m.devRef = m.fit.res; m.devKind = "fit"; }
+  if (m.devRef) { m.maxDev = m.devRef.reduce((a, v) => Math.abs(v) > Math.abs(a) ? v : a, 0); m.maxAt = m.devRef.findIndex(v => v === m.maxDev); }
+  if (m.fit && m.fit.straight) m.notes.push("These points are straight, or very close to it. No radius can be fitted.");
+  m.ok = true;
+  return m;
+}
+
+/* ============ plots ============ */
+function niceStep(v) { const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
+
+function planSVG(el, m, exag, mini) {
+  if (!el) return;
+  const W = Math.max(260, Math.round(el.clientWidth || 600));
+  if (!m.ok) { el.innerHTML = `<p class="small muted" style="padding:28px 8px;text-align:center">${esc(m.msg || "")}</p>`; return; }
+  const ref = m.design && !m.design.err ? m.design : (m.fit && !m.fit.straight ? m.fit : null);
+  const X = p => {
+    if (exag === 1 || !ref) return p;
+    const dx = p.x - ref.cx, dy = p.y - ref.cy, d = hyp(dx, dy) || 1, nd = ref.R + (d - ref.R) * exag;
+    return { x: ref.cx + dx / d * nd, y: ref.cy + dy / d * nd };
+  };
+  const trace = m.pts.map(X), line = m.line.map(X), arcs = [];
+  for (const [c, cls] of [[m.design && !m.design.err ? m.design : null, "design"], [m.fit && !m.fit.straight ? m.fit : null, "fit"]]) {
+    if (!c) continue;
+    const sp = arcSpan(m.pts, c.cx, c.cy);
+    arcs.push({ cls, pts: arcPoints(c.cx, c.cy, c.R, sp.a0, sp.sweep).map(X) });
+  }
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  [line, ...arcs.map(a => a.pts)].forEach(arr => arr.forEach(p => { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y); }));
+  const pad = mini ? 18 : 30, dx = Math.max(maxx - minx, 1), dy = Math.max(maxy - miny, 1);
+  const Hmax = mini ? 190 : Math.min(460, Math.max(260, W * 0.62));
+  const sc = Math.min((W - 2 * pad) / dx, (Hmax - 2 * pad - 24) / dy);
+  const H = Math.round(Math.max(mini ? 120 : 200, dy * sc + 2 * pad + 30));
+  const ox = (W - dx * sc) / 2, oy = (H - 22 - dy * sc) / 2 + 4;
+  const P = p => [ox + (p.x - minx) * sc, H - 22 - oy - (p.y - miny) * sc];
+  const path = arr => arr.map((p, i) => { const [x, y] = P(p); return (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }).join("");
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Plan of the traced wall face">`;
+  const [ax, ay] = P(line[0]), [bx, by] = P(line[line.length - 1]);
+  svg += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 4"/>`;
+  for (const a of arcs) svg += a.cls === "design"
+    ? `<path d="${path(a.pts)}" fill="none" stroke="var(--design)" stroke-width="2" stroke-dasharray="1.5 4" stroke-linecap="round"/>`
+    : `<path d="${path(a.pts)}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="7 5"/>`;
+  svg += `<path d="${path(line)}" fill="none" stroke="var(--trace)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const every = Math.max(1, Math.ceil(trace.length / (mini ? 4 : W < 500 ? 6 : 10)));
+  const fc = m.fit && !m.fit.straight ? m.fit : null;
+  trace.forEach((p, i) => {
+    const [x, y] = P(p);
+    const out = m.devRef && Math.abs(m.devRef[i]) > (+state.setup.tol || Infinity);
+    svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${mini ? 2.6 : 3.4}" fill="${out ? "var(--bad)" : "var(--surface)"}" stroke="${out ? "var(--bad)" : "var(--trace)"}" stroke-width="1.6"/>`;
+    if (i % every === 0 || i === trace.length - 1) {
+      let lx = 0, ly = -1;
+      if (fc) { const [cx, cy] = P(X({ x: fc.cx, y: fc.cy })); const d = hyp(x - cx, y - cy) || 1; lx = (x - cx) / d; ly = (y - cy) / d; }
+      const tx = x + lx * 14, ty = y + ly * 14 + 4;
+      svg += `<text class="svg-lbl" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle">S${i}</text>`;
+    }
+  });
+  if (!mini && fc) {
+    const mid = trace[Math.floor(trace.length / 2)], [mx, my] = P(mid), [cx, cy] = P(X({ x: fc.cx, y: fc.cy }));
+    const d = hyp(cx - mx, cy - my) || 1, ux = (cx - mx) / d, uy = (cy - my) / d, len = Math.min(46, d * 0.5);
+    const ex = mx + ux * (14 + len), ey = my + uy * (14 + len);
+    svg += `<line x1="${(mx + ux * 14).toFixed(1)}" y1="${(my + uy * 14).toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="var(--muted)" stroke-width="1.2"/>`;
+    const hx = -uy, hy = ux;
+    svg += `<path d="M${ex.toFixed(1)} ${ey.toFixed(1)} l${(-ux * 7 + hx * 3.5).toFixed(1)} ${(-uy * 7 + hy * 3.5).toFixed(1)} M${ex.toFixed(1)} ${ey.toFixed(1)} l${(-ux * 7 - hx * 3.5).toFixed(1)} ${(-uy * 7 - hy * 3.5).toFixed(1)}" stroke="var(--muted)" stroke-width="1.2" fill="none"/>`;
+    svg += `<text class="svg-txt" x="${(ex + ux * 6).toFixed(1)}" y="${(ey + uy * 10 + 4).toFixed(1)}" text-anchor="middle">to center · R ${esc(fmtLen(fc.R))}</text>`;
+  }
+  const raw = (W / 5) / sc, bar = [1, 2, 3, 6, 12, 24, 36, 48, 60, 120, 240, 360, 600].find(v => v >= raw * 0.7) || niceStep(raw), bpx = bar * sc;
+  const barTxt = bar >= 12 && bar % 12 === 0 ? `${bar / 12}'` : `${bar}"`;
+  svg += `<g transform="translate(${pad},${H - 10})"><line x1="0" y1="0" x2="${bpx.toFixed(1)}" y2="0" stroke="var(--muted)" stroke-width="1.5"/><line x1="0" y1="-4" x2="0" y2="0" stroke="var(--muted)"/><line x1="${bpx.toFixed(1)}" y1="-4" x2="${bpx.toFixed(1)}" y2="0" stroke="var(--muted)"/><text class="svg-txt" x="${(bpx + 6).toFixed(1)}" y="3">${esc(barTxt)}</text></g>`;
+  if (exag > 1 && ref) svg += `<text class="svg-txt" x="${W - pad}" y="${H - 7}" text-anchor="end">deviations ×${exag}</text>`;
+  svg += "</svg>";
+  el.innerHTML = svg;
+}
+
+function devSVG(el, m) {
+  const W = Math.max(260, Math.round(el.clientWidth || 500));
+  if (!m.ok || !m.devRef) { el.innerHTML = `<p class="small muted" style="padding:28px 8px;text-align:center">${esc(m.ok ? "Set a design radius on Setup, or record enough curve to fit an arc." : m.msg || "")}</p>`; return; }
+  const dev = m.devRef, n = dev.length, tol = +state.setup.tol || 0;
+  const H = 230, pl = 44, pr = 10, pt = 14, pb = 26, ih = H - pt - pb, iw = W - pl - pr;
+  const amax = Math.max(...dev.map(Math.abs));
+  const target = Math.max(amax * 1.2, tol * 1.35, 0.125);
+  const ymax = [0.125, 0.25, 0.375, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 18, 24, 36, 48].find(v => v >= target) || Math.ceil(target / 12) * 12;
+  const Y = v => pt + (ymax - v) / (2 * ymax) * ih;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Deviation at each station">`;
+  if (tol > 0) svg += `<rect x="${pl}" y="${Y(tol).toFixed(1)}" width="${iw}" height="${(Y(-tol) - Y(tol)).toFixed(1)}" fill="var(--good-soft)"/>`;
+  const ticks = [ymax, 0, -ymax]; if (tol > 0 && tol < ymax * 0.85) ticks.push(tol, -tol);
+  ticks.forEach(v => {
+    svg += `<line x1="${pl}" x2="${W - pr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="${v === 0 ? "var(--muted)" : "var(--line)"}" stroke-width="1"${v === 0 ? "" : ' stroke-dasharray="2 3"'}/>`;
+    svg += `<text class="svg-txt" x="${pl - 6}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end">${esc(sgnLen(v))}</text>`;
+  });
+  const slot = iw / n, bw = Math.max(3, Math.min(24, slot * 0.62)), every = Math.max(1, Math.ceil(n / Math.floor(iw / 34)));
+  dev.forEach((v, i) => {
+    const cx = pl + slot * (i + 0.5), y0 = Y(0), y1 = Y(v);
+    const cls = tol > 0 ? (Math.abs(v) > tol ? "var(--bad)" : Math.abs(v) > tol * 0.75 ? "var(--warn)" : "var(--good)") : "var(--trace)";
+    svg += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${Math.min(y0, y1).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, Math.abs(y1 - y0)).toFixed(1)}" rx="2" fill="${cls}"/>`;
+    if (n <= 16 && W >= 420) svg += `<text class="svg-txt" x="${cx.toFixed(1)}" y="${(v >= 0 ? y1 - 4 : y1 + 12).toFixed(1)}" text-anchor="middle">${esc(sgnLen(v))}</text>`;
+    if (i % every === 0 || i === n - 1) svg += `<text class="svg-lbl" x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle">S${i}</text>`;
+  });
+  svg += "</svg>";
+  el.innerHTML = svg;
+}
+
+/* ============ render ============ */
+function renderHeader() {
+  const j = state.setup.job || "Untitled job", w = state.setup.wall;
+  $("jobLine").textContent = j + (w ? " · " + w : "") + " · " + methodName();
+  $("exampleBanner").hidden = !state.example;
+}
+
+function renderTabs() {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+  ["trace", "results", "setup"].forEach(t => $("tab-" + t).hidden = t !== state.tab);
+  document.querySelectorAll("#methodSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === state.method)));
+  $("sensorPane").hidden = state.method !== "sensor";
+  $("stringPane").hidden = state.method !== "string";
+  const sw = state.sensorMode === "sweep";
+  document.querySelectorAll("#sensorModeSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sm === state.sensorMode)));
+  $("stCard").hidden = sw; $("howto").hidden = sw; $("howtoSweep").hidden = !sw; $("sweepCard").hidden = !sw || !state.sweep;
+}
+
+function renderStationTable() {
+  const st = state.sensor.stations, rel = st.length ? sensorThetas(state.sensor, false).th : [];
+  let h = `<thead><tr><th>Stn</th><th>Along face</th><th>Heading °</th><th>Turn °</th><th>Steady</th><th></th></tr></thead><tbody>`;
+  if (!st.length) h += `<tr><td colspan="6" style="text-align:left;font-family:var(--display)" class="muted">No stations yet.</td></tr>`;
+  st.forEach((p, i) => {
+    const turn = i ? (rel[i] - rel[i - 1]) * R2D : null;
+    h += `<tr><td>S${i}</td><td><input type="text" inputmode="decimal" autocomplete="off" data-si="${i}" value="${inVal(p.s)}" aria-label="Distance of station ${i}"></td><td>${sgn(rel[i] * R2D, 2)}</td><td>${turn == null ? "—" : sgn(turn, 2)}</td><td><span class="dot${p.sd > 0.25 ? " warn" : ""}" title="spread ${p.sd.toFixed(2)}°"></span></td><td><button class="x" data-del="${i}" aria-label="Delete station ${i}">×</button></td></tr>`;
+  });
+  const c = state.sensor.closure;
+  if (c && st.length && state.sensor.frames[c.frame] != null) {
+    const d = sensorThetas(state.sensor, false).drift;
+    h += `<tr><td>Close</td><td class="muted">at S0</td><td>${d ? sgn(d.deg, 2) : "—"}</td><td class="muted">drift</td><td><span class="dot${c.sd > 0.25 ? " warn" : ""}"></span></td><td><button class="x" data-delclose="1" aria-label="Delete close check">×</button></td></tr>`;
+  }
+  $("stTable").innerHTML = h + "</tbody>";
+  $("stCount").textContent = st.length ? `${st.length} station${st.length > 1 ? "s" : ""} · ${fmtLen(st[st.length - 1].s)}` : "";
+}
+
+function renderStringTable() {
+  const rows = state.string.rows;
+  let h = `<thead><tr><th>#</th><th>Along string</th><th>Offset</th><th></th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td>${i}</td><td><input type="text" autocomplete="off" data-rx="${i}" value="${inVal(r.x)}" aria-label="Distance along string, row ${i}"></td><td><input type="text" autocomplete="off" data-ro="${i}" value="${inVal(r.o)}" aria-label="Offset, row ${i}"></td><td><button class="x" data-rdel="${i}" aria-label="Delete row ${i}">×</button></td></tr>`;
+  });
+  if (!rows.length) h += `<tr><td colspan="4" style="text-align:left;font-family:var(--display)" class="muted">No offsets yet. Add the first one.</td></tr>`;
+  $("strTable").innerHTML = h + "</tbody>";
+}
+
+function tile(k, v, unit, d, lead) {
+  return `<div class="tile${lead ? " lead" : ""}"><span class="k">${k}</span><span class="v">${v}${unit ? `<small>${unit}</small>` : ""}</span><span class="d">${d}</span></div>`;
+}
+
+function renderResults() {
+  const m = model, R = +state.setup.R, tol = +state.setup.tol || 0;
+  const notes = m.ok ? m.notes : [m.msg];
+  $("resNotice").hidden = !notes.length;
+  $("resNoticeText").textContent = notes.join(" ");
+  if (!m.ok) { $("tiles").innerHTML = ""; }
+  else {
+    const fit = m.fit && !m.fit.straight ? m.fit : null;
+    let t = tile("Best-fit radius", fit ? esc(fmtLen(fit.R)) : "Straight", "",
+      fit ? (R > 0 ? `Design ${esc(fmtLen(R))} · ΔR ${esc(sgnLen(fit.R - R))}` : "No design radius set") : "No curvature found", true);
+    if (m.devRef) {
+      const ok = !tol || Math.abs(m.maxDev) <= tol;
+      t += tile(m.devKind === "design" ? "Max off design arc" : "Max off best fit", esc(sgnLen(m.maxDev)), "",
+        `<span class="chip ${ok ? "good" : "bad"}">${ok ? `Within ±${esc(fmtLen(tol))}` : `Over at S${m.maxAt}`}</span>`);
+    }
+    t += tile("Arc length", esc(fmtLen(m.L)), "", `Chord ${esc(fmtLen(m.C))} · rise ${esc(fmtLen(m.rise))}`);
+    t += tile("Fit RMS", fit ? fit.rms.toFixed(3) + '"' : "—", "", `${m.n} points · ${methodName()}`);
+    $("tiles").innerHTML = t;
+  }
+  planSVG($("plot"), m, state.exag, false);
+  $("devTitle").textContent = m.devKind === "fit" ? "Deviation from best-fit arc" : "Deviation from design arc";
+  devSVG($("devChart"), m);
+  document.querySelectorAll("#exagSeg button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.x === state.exag)));
+
+  // tape check
+  const sensor = state.method === "sensor";
+  $("tapeCard").hidden = !sensor;
+  if (sensor) {
+    const S = state.sensor, kv = [];
+    if (m.ok) {
+      kv.push(["Traced chord (sensors)", fmtLen(m.Craw)]);
+      if (S.chord > 0) {
+        kv.push(["Taped chord", fmtLen(S.chord)]);
+        kv.push(["Difference", sgnLen(m.Craw - S.chord)]);
+        kv.push(["Radius from tape (chord + arc length)", fmtLen(radiusFromArcChord(m.L, S.chord))]);
+      }
+      if (S.chord > 0 && S.rise > 0) kv.push(["Radius from tape (chord + rise)", fmtLen(radiusFromChordRise(S.chord, S.rise))]);
+      if (m.fit && !m.fit.straight) kv.push(["Radius from sensors (best fit)", fmtLen(m.fit.R)]);
+      if (S.useChord && m.k !== 1) kv.push(["Turn scaled by", "×" + m.k.toFixed(4)]);
+    }
+    $("tapeKv").innerHTML = kv.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("") || `<dt class="muted">Record a trace first.</dt><dd></dd>`;
+    const d = m.ok ? m.drift : null;
+    $("driftLbl").textContent = d ? `Take out gyro drift: ${sgn(d.deg, 2)}° over ${Math.round(d.sec / 60)} min ${Math.round(d.sec % 60)} s, from the close check` : "Take out gyro drift. No close check recorded yet. After the last station, go back to station 0 and tap Close check.";
+    $("useDrift").checked = !!S.useDrift; $("useDrift").disabled = !d;
+    $("useChord").checked = !!S.useChord;
+    if (document.activeElement !== $("chordIn")) $("chordIn").value = inVal(S.chord);
+    if (document.activeElement !== $("riseIn")) $("riseIn").value = inVal(S.rise);
+  }
+
+  // station table
+  if (m.ok) {
+    const fit = m.fit && !m.fit.straight ? m.fit : null, des = m.design && !m.design.err ? m.design : null;
+    const flag = v => !tol ? "" : Math.abs(v) > tol ? "tag-bad" : Math.abs(v) > tol * 0.75 ? "tag-warn" : "";
+    let h = `<thead><tr><th>Stn</th><th>${sensor ? "Along face" : "Along string"}</th><th>X</th><th>Y</th>${sensor ? "<th>Turn °</th>" : ""}<th>Off fit</th><th>Off design</th></tr></thead><tbody>`;
+    m.pts.forEach((p, i) => {
+      const turn = sensor && i ? (m.th[i] - m.th[i - 1]) * R2D : null;
+      h += `<tr><td>S${i}</td><td>${fmtLen(m.s[i])}</td><td>${fmtLen(p.x)}</td><td>${fmtLen(p.y)}</td>${sensor ? `<td>${turn == null ? "—" : sgn(turn, 2)}</td>` : ""}<td>${fit ? sgnLen(fit.res[i]) : "—"}</td><td class="${des ? flag(des.dev[i]) : ""}">${des ? sgnLen(des.dev[i]) : "—"}</td></tr>`;
+    });
+    $("resTable").innerHTML = h + "</tbody>";
+    $("resCount").textContent = "inches · + is outside the arc";
+  } else { $("resTable").innerHTML = ""; $("resCount").textContent = ""; }
+  $("dxfNote").textContent = sensor ? "" : "String line: X runs along the string, Y is the offset to the face.";
+}
+
+function renderTrace() {
+  if (state.method === "sensor") { if (state.sensorMode === "sweep") renderSweepTable(); else renderStationTable(); planSVG($("miniPlot"), model, 1, true); }
+  else { renderStringTable(); planSVG($("miniPlot2"), model, 1, true); }
+  const fit = model.ok && model.fit && !model.fit.straight ? model.fit : null;
+  const info = fit ? `R ${fmtLen(fit.R)} · arc ${fmtLen(model.L)}` : "";
+  $("miniInfo").textContent = info; $("miniInfo2").textContent = info;
+}
+
+function renderAll() {
+  model = computeModel();
+  renderHeader(); renderTabs();
+  if (state.tab === "trace") renderTrace();
+  if (state.tab === "results") renderResults();
+  if (typeof renderSensorUI === "function") renderSensorUI();
+}
+
+/* ============ continuous sweep ============ */
+const methodName = () => state.method === "string" ? "string line" : state.sensorMode === "sweep" ? "phone sensors, continuous" : "phone sensors, stations";
+
+function sweepSample(t, psi) {
+  const w = sens.sw, dt = t - w.goPerf;
+  if (dt < 0) return;
+  w.t.push(Math.round(dt)); w.psi.push(Math.round(psi * 1e5) / 1e5);
+  if (dt > 300000) stopSweep(true);
+}
+
+async function startSweep() {
+  if (!sens.got || sens.rec || sens.sw) return;
+  if (state.sweep && !(await ask("Replace the recorded sweep?", "Starting a new sweep deletes the one already recorded. Export a DXF first if you want to keep it.", "Replace"))) return;
+  record("sweepstart");
+}
+
+// Called by finishRecord once the phone has been held still for the start or close reading.
+function sweepRecorded(kind, psi, sd) {
+  if (kind === "sweepstart") {
+    state.sweep = null;
+    sens.sw = { frame: sens.frame, goPerf: performance.now(), goDate: Date.now(), psi0: psi, sd, t: [], psi: [], marks: [], sp: +state.nextSp || 12 };
+    beep(true); toast("Go. Slide steadily and tap Mark at each tape mark.");
+  } else {
+    const W = state.sweep;
+    W.closure = { psi, t: Date.now() - W.goDate, sd };
+    beep(sd <= 0.25); toast(`Close check recorded. Drift ${sgn(wrapPi(psi - W.psi0) * R2D, 2)}°`);
+  }
+  save(); renderAll();
+}
+
+function markSweep() {
+  const w = sens.sw; if (!w) return;
+  w.marks.push({ t: Math.round(performance.now() - w.goPerf), s: (w.marks.length + 1) * w.sp });
+  beep(true); renderSensorUI();
+}
+
+function stopSweep(auto) {
+  const w = sens.sw; if (!w) return;
+  sens.sw = null;
+  const n = w.marks.length;
+  state.sweep = {
+    frame: w.frame, goDate: w.goDate, psi0: w.psi0, sd: w.sd, t: w.t, psi: w.psi, marks: w.marks, sp: w.sp, closure: null,
+    stop: { t: Math.round(performance.now() - w.goPerf), s: n ? (n + 1) * w.sp : null }
+  };
+  beep(true);
+  toast(auto ? "The sweep stopped at the 5 minute limit." : n ? `Sweep recorded: ${n} marks, ${fmtLen(state.sweep.stop.s)}.` : "Sweep recorded. Enter the distance where you stopped.");
+  save(); renderAll();
+}
+
+function renderSweepUI() {
+  const w = sens.sw, W = state.sweep, live = sens.on && sens.got, busy = !!sens.rec, sp = w ? w.sp : (+state.nextSp || 12);
+  ["btnRecord", "btnRelink", "btnUndo", "btnClose", "relinkBanner"].forEach(id => $(id).hidden = true);
+  $("spLabel").textContent = "Distance between tape marks";
+  $("nextSpacing").disabled = $("spMinus").disabled = $("spPlus").disabled = !!w;
+  let th = null;
+  if (sens.last) th = w ? wrapPi(sens.last.psi - w.psi0) : sens.startPsi != null ? wrapPi(sens.last.psi - sens.startPsi) : null;
+  $("roHeading").textContent = th == null ? "--.--" : (th >= 0 ? "+" : "−") + Math.abs(th * R2D).toFixed(2);
+  if (w) {
+    const n = w.marks.length;
+    $("roStation").textContent = `Recording · ${((performance.now() - w.goPerf) / 1000).toFixed(1)} s`;
+    $("roDist").textContent = `${n} mark${n === 1 ? "" : "s"} · next ${fmtLen((n + 1) * sp)}`;
+    $("roDelta").textContent = "Turn since start. Keep sliding steadily and tap Mark at each tape mark.";
+  } else if (W) {
+    $("roStation").textContent = "Sweep recorded";
+    $("roDist").textContent = `${W.marks.length} marks · ${W.stop.s ? fmtLen(W.stop.s) : "stop distance needed"}`;
+    $("roDelta").textContent = "Check the sweep table below, then open Results.";
+  } else {
+    $("roStation").textContent = "Continuous sweep";
+    $("roDist").textContent = `marks every ${fmtLen(sp)}`;
+    $("roDelta").textContent = live ? "Put the phone on the first tape mark, then tap Start sweep." : "Start sensors, then put the phone on the first tape mark.";
+  }
+  $("btnSweepStart").hidden = !live || !!w;
+  $("btnSweepStart").disabled = busy;
+  if (!busy) $("btnSweepStart").textContent = W ? "Start a new sweep" : "Start sweep";
+  $("btnMark").hidden = !w; $("btnStop").hidden = !w;
+  if (w) { const n = w.marks.length; $("btnMark").textContent = `Mark ${n + 1} · ${fmtLen((n + 1) * sp)}`; $("btnStop").textContent = n ? `Stop at ${fmtLen((n + 1) * sp)}` : "Stop"; }
+  $("btnSweepClose").hidden = !(live && W && !w && !W.closure && W.frame === sens.frame);
+  $("btnSweepClose").disabled = busy;
+  if (document.activeElement !== $("nextSpacing")) $("nextSpacing").value = inVal(sp);
+}
+
+function renderSweepTable() {
+  const W = state.sweep;
+  $("sweepCard").hidden = !W;
+  if (!W) return;
+  const A = [{ t: 0, s: 0 }, ...W.marks, W.stop], speeds = [];
+  for (let i = 1; i < A.length; i++) speeds.push(A[i].s != null && A[i - 1].s != null && A[i].t > A[i - 1].t ? (A[i].s - A[i - 1].s) / ((A[i].t - A[i - 1].t) / 1000) : null);
+  const ok = speeds.filter(v => v > 0).sort((a, b) => a - b), med = ok.length ? ok[Math.floor(ok.length / 2)] : null;
+  const spd = v => {
+    if (v == null || !isFinite(v)) return "—";
+    const odd = med && (v > med * 1.6 || v < med * 0.6);
+    return `<span class="${odd ? "tag-warn" : ""}">${v.toFixed(1)}${odd ? " check" : ""}</span>`;
+  };
+  let h = `<thead><tr><th>Point</th><th>Time s</th><th>Along face</th><th>Speed in/s</th><th></th></tr></thead><tbody>`;
+  h += `<tr><td>Start</td><td>0.0</td><td>${fmtLen(0)}</td><td></td><td></td></tr>`;
+  W.marks.forEach((mk, i) => {
+    h += `<tr><td>Mark ${i + 1}</td><td>${(mk.t / 1000).toFixed(1)}</td><td><input type="text" inputmode="decimal" autocomplete="off" data-mk="${i}" value="${esc(inVal(mk.s))}" aria-label="Distance of mark ${i + 1}"></td><td>${spd(speeds[i])}</td><td><button class="x" data-mkdel="${i}" aria-label="Delete mark ${i + 1}">×</button></td></tr>`;
+  });
+  h += `<tr><td>Stop</td><td>${(W.stop.t / 1000).toFixed(1)}</td><td><input type="text" inputmode="decimal" autocomplete="off" data-stop="1" value="${esc(inVal(W.stop.s))}" placeholder="enter" aria-label="Distance along the face at the stop"></td><td>${spd(speeds[speeds.length - 1])}</td><td></td></tr>`;
+  if (W.closure) h += `<tr><td>Close</td><td>${(W.closure.t / 1000).toFixed(1)}</td><td class="muted">drift ${sgn(wrapPi(W.closure.psi - W.psi0) * R2D, 2)}°</td><td></td><td><button class="x" data-swclose="1" aria-label="Delete close check">×</button></td></tr>`;
+  $("swTable").innerHTML = h + "</tbody>";
+  $("swInfo").textContent = `${(W.stop.t / 1000).toFixed(1)} s · ${W.t.length} readings`;
+}
+
+$("sensorModeSeg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-sm]"); if (!b || sens.sw || sens.rec) return;
+  state.sensorMode = b.dataset.sm; save(); renderAll();
+});
+$("btnSweepStart").addEventListener("click", startSweep);
+// Mark and Stop fire on touch-down so the tap time is as close as possible to the moment the phone passes the mark.
+[["btnMark", markSweep], ["btnStop", () => stopSweep(false)]].forEach(([id, fn]) => {
+  $(id).addEventListener("pointerdown", e => { e.preventDefault(); fn(); });
+  $(id).addEventListener("click", e => { if (e.detail === 0) fn(); });
+});
+$("btnSweepClose").addEventListener("click", () => record("sweepclose"));
+$("btnSweepDiscard").addEventListener("click", async () => {
+  if (!state.sweep || !(await ask("Discard the sweep?", "This deletes the recorded sweep on this device.", "Discard"))) return;
+  state.sweep = null; save(); renderAll();
+});
+$("swTable").addEventListener("change", e => {
+  const W = state.sweep, t = e.target; if (!W) return;
+  const v = parseLen(t.value);
+  if (t.dataset.stop) W.stop.s = v;
+  else if (t.dataset.mk != null) {
+    if (v == null) return;
+    const i = +t.dataset.mk, d = v - W.marks[i].s;
+    for (let j = i; j < W.marks.length; j++) W.marks[j].s += d;
+    if (W.stop.s != null) W.stop.s += d;
+  } else return;
+  save(); renderAll();
+});
+$("swTable").addEventListener("click", e => {
+  const b = e.target.closest("button"), W = state.sweep; if (!b || !W) return;
+  if (b.dataset.mkdel != null) {
+    const i = +b.dataset.mkdel, d = W.marks[i].s - (i ? W.marks[i - 1].s : 0);
+    W.marks.splice(i, 1);
+    for (let j = i; j < W.marks.length; j++) W.marks[j].s -= d;
+    if (W.stop.s != null) W.stop.s -= d;
+  } else if (b.dataset.swclose) W.closure = null;
+  else return;
+  save(); renderAll();
+});
+
+/* ============ sensors ============ */
+const sens = { on: false, frame: null, last: null, startPsi: null, rate: null, rateAt: 0, buf: [], got: false, rec: null, audio: null, wake: null, raf: 0 };
+const newFrame = () => "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const isFramed = (() => { try { return window.self !== window.top; } catch { return true; } })();
+let cache = { base: 0, lastTh: 0 };
+function refreshCache() {
+  const st = state.sensor.stations;
+  if (!st.length) { cache = { base: 0, lastTh: 0 }; return; }
+  const f0 = state.sensor.frames[st[0].frame] ?? 0;
+  const th = sensorThetas(state.sensor, false).th;
+  cache = { base: wrapPi(st[0].psi + f0), lastTh: th[th.length - 1] };
+}
+const needRelink = () => state.sensorMode !== "sweep" && sens.on && state.sensor.stations.length > 0 && state.sensor.frames[sens.frame] == null;
+
+// Inside the Claude app or claude.ai the page runs in a locked frame that never receives motion
+// sensors; iOS reports that as "denied" even though nothing on the phone is set to deny.
+const inClaude = isFramed || !!window.claude;
+const CLAUDE_MSG = "Live tracing can't run inside Claude. The Claude app and claude.ai don't let pages use the iPhone's motion sensors, so Safari reports access as denied. Nothing on your phone needs changing. To trace with sensors, open the standalone copy (wall-arc-tracer.html) in Safari from an https:// address. Here you can use the String line method and review or export results.";
+function sensorReason() {
+  if (inClaude) return CLAUDE_MSG;
+  if (!window.isSecureContext) return "Safari only gives motion sensors to pages loaded over https://. Open this page from an https address.";
+  if (!("DeviceOrientationEvent" in window)) return "This browser has no motion sensors. Open the page on your iPhone.";
+  return "No sensor readings are coming in. That's expected on a computer. On the iPhone, check that you allowed motion access for this site, then reload the page.";
+}
+function showSensorNotice(t, tone) {
+  $("sensorNoticeText").textContent = t || "";
+  $("sensorNotice").className = "notice " + (tone || (inClaude ? "warn" : "bad"));
+  $("sensorNotice").hidden = !t;
+}
+
+async function startSensors() {
+  try { sens.audio = sens.audio || new (window.AudioContext || window.webkitAudioContext)(); sens.audio.resume && sens.audio.resume(); } catch { }
+  let perm = "granted";
+  try { if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") perm = await DeviceOrientationEvent.requestPermission(); } catch { perm = "error"; }
+  try { if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function") await DeviceMotionEvent.requestPermission(); } catch { }
+  if (perm === "denied" || perm === "error") {
+    showSensorNotice(inClaude ? CLAUDE_MSG : "Motion access was denied for this site. Close the Safari tab, open the page again, and tap Allow when Safari asks. If it doesn't ask, clear this site's data in Settings > Apps > Safari > Advanced > Website Data.");
+    return;
+  }
+  if (state.example) {
+    const sp = state.setup, sm = state.sensorMode;
+    state = blankState(); state.setup.tol = sp.tol; state.method = "sensor"; state.sensorMode = sm; syncSetup();
+    toast(sm === "sweep" ? "Example cleared. Ready to sweep." : "Example cleared. Ready for station 0.");
+  }
+  if (!sens.on) {
+    window.addEventListener("deviceorientation", onOri);
+    window.addEventListener("devicemotion", onMot);
+    sens.on = true; sens.frame = newFrame();
+  }
+  requestWake();
+  setTimeout(() => { if (!sens.got) showSensorNotice(sensorReason()); }, 1800);
+  refreshCache(); save(); renderAll();
+}
+async function requestWake() { try { if (navigator.wakeLock && !sens.wake) { sens.wake = await navigator.wakeLock.request("screen"); sens.wake.addEventListener("release", () => sens.wake = null); } } catch { } }
+
+function onOri(e) {
+  if (e.alpha == null || e.beta == null) return;
+  if (!sens.got) { sens.got = true; showSensorNotice(""); }
+  const t = performance.now(), psi = headingFromEuler(e.alpha, e.beta);
+  if (sens.startPsi == null) sens.startPsi = psi;
+  sens.last = { psi, beta: e.beta, t };
+  sens.buf.push({ psi, t });
+  while (sens.buf.length && sens.buf[0].t < t - 600) sens.buf.shift();
+  if (sens.rec && t >= sens.rec.start) sens.rec.samples.push(psi);
+  if (sens.sw) sweepSample(t, psi);
+  if (!sens.raf) sens.raf = requestAnimationFrame(() => { sens.raf = 0; renderSensorUI(); });
+}
+function onMot(e) {
+  const r = e.rotationRate; if (!r || r.alpha == null) return;
+  const mag = Math.hypot(r.alpha, r.beta || 0, r.gamma || 0);
+  sens.rate = sens.rate == null ? mag : sens.rate * 0.75 + mag * 0.25; sens.rateAt = performance.now();
+}
+function steadiness() {
+  if (!sens.last) return null;
+  if (sens.rate != null && performance.now() - sens.rateAt < 500) return sens.rate < 2 ? "good" : sens.rate < 8 ? "warn" : "bad";
+  if (sens.buf.length < 4) return "warn";
+  const m = sens.buf.reduce((a, b) => a + Math.abs(wrapPi(b.psi - sens.buf[0].psi)), 0) / sens.buf.length * R2D;
+  return m < 0.08 ? "good" : m < 0.4 ? "warn" : "bad";
+}
+
+function liveTheta() {
+  if (!sens.last) return null;
+  const st = state.sensor.stations;
+  if (!st.length) return wrapPi(sens.last.psi - sens.startPsi);
+  const off = state.sensor.frames[sens.frame];
+  if (off == null) return null;
+  const rel = wrapPi(sens.last.psi + off - cache.base);
+  return cache.lastTh + wrapPi(rel - cache.lastTh);
+}
+
+function renderSensorUI() {
+  if (state.method !== "sensor") return;
+  const st = state.sensor.stations, n = st.length, sp = +state.nextSp || 0;
+  const nextS = n ? st[n - 1].s + sp : 0, relink = needRelink();
+  $("roStation").textContent = relink ? `Re-link at S${n - 1}` : `Station ${n}`;
+  $("roDist").textContent = relink ? `${fmtLen(st[n - 1].s)} along face` : `${fmtLen(nextS)} along face`;
+  const th = liveTheta();
+  $("roHeading").textContent = th == null ? "--.--" : (th * R2D >= 0 ? "+" : "−") + Math.abs(th * R2D).toFixed(2);
+  const sd = steadiness(), chip = $("roSteady");
+  chip.className = "chip" + (sd ? " " + sd : "");
+  chip.textContent = !sens.on ? "Sensors off" : !sens.got ? "Waiting…" : sd === "good" ? "Steady" : sd === "warn" ? "Settling" : "Moving";
+  if (!sens.on || !sens.got) $("roDelta").textContent = n ? `Turn since S${n - 1}: —` : "Readings count from station 0";
+  else if (!n) $("roDelta").textContent = "Live turn since sensors started. Station 0 becomes zero.";
+  else if (th == null) $("roDelta").textContent = "Re-link to continue";
+  else {
+    const d = (th - cache.lastTh) * R2D, R = +state.setup.R;
+    $("roDelta").textContent = `Turn since S${n - 1}: ${sgn(d, 2)}°` + (R > 0 && sp > 0 ? ` · expect ≈${(sp / R * R2D).toFixed(2)}° at R ${fmtLen(R)}` : "");
+  }
+  const tilt = $("roTilt");
+  if (sens.last) { const b = Math.abs(sens.last.beta) > 90 ? 180 - Math.abs(sens.last.beta) : Math.abs(sens.last.beta); tilt.textContent = `Pitch ${b.toFixed(0)}°` + (b > 50 ? ": keep the top pointing along the wall, not up" : ""); tilt.className = b > 50 ? "tag-bad" : ""; }
+  else { tilt.textContent = "Pitch —"; tilt.className = ""; }
+  $("btnSensors").hidden = sens.on && sens.got;
+  $("btnSensors").textContent = sens.on ? "Waiting for sensors…" : inClaude ? "Try sensors anyway" : "Start sensors";
+  $("btnSensors").className = inClaude && !sens.got ? "btn" : "primary";
+  $("btnUseString").hidden = !(inClaude && !sens.got);
+  if (state.sensorMode === "sweep") { renderSweepUI(); return; }
+  ["btnSweepStart", "btnMark", "btnStop", "btnSweepClose"].forEach(id => $(id).hidden = true);
+  $("btnUndo").hidden = $("btnClose").hidden = false;
+  $("spLabel").textContent = "Distance to next station";
+  $("nextSpacing").disabled = $("spMinus").disabled = $("spPlus").disabled = false;
+  const busy = !!sens.rec;
+  $("btnRecord").hidden = !(sens.on && sens.got) || relink;
+  $("btnRelink").hidden = !(sens.on && sens.got) || !relink;
+  $("relinkBanner").hidden = !relink;
+  if (relink) $("relinkText").textContent = `The phone's heading reference was reset, which happens when the page reloads or goes to the background. Put the phone back on S${n - 1} (${fmtLen(st[n - 1].s)}) and tap Re-link before you continue.`;
+  $("btnRecord").disabled = busy; $("btnRelink").disabled = busy;
+  if (!busy) { $("btnRecord").textContent = `Record station ${n}`; $("btnRelink").textContent = `Re-link at S${n - 1}`; }
+  $("btnUndo").disabled = !n || busy;
+  $("btnClose").disabled = n < 2 || !(sens.on && sens.got) || relink || busy;
+  if (document.activeElement !== $("nextSpacing")) $("nextSpacing").value = inVal(state.nextSp);
+}
+
+function beep(ok) {
+  try {
+    const a = sens.audio; if (!a) return;
+    const o = a.createOscillator(), g = a.createGain(), t = a.currentTime;
+    o.frequency.value = ok ? 1320 : 420;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + (ok ? 0.14 : 0.35));
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.4);
+  } catch { }
+}
+
+function record(kind) {
+  if (!sens.got || sens.rec) return;
+  const btn = $({ relink: "btnRelink", close: "btnClose", sweepstart: "btnSweepStart", sweepclose: "btnSweepClose" }[kind] || "btnRecord");
+  btn.textContent = "Hold still…";
+  sens.rec = { kind, samples: [], start: performance.now() + 350 };
+  renderSensorUI();
+  setTimeout(finishRecord, 1150);
+}
+function finishRecord() {
+  const r = sens.rec; sens.rec = null;
+  const n = r.samples.length;
+  if (n < 3) { beep(false); toast("Not enough sensor readings. Hold still and try again."); renderSensorUI(); return; }
+  let sx = 0, sy = 0; r.samples.forEach(p => { sx += Math.cos(p); sy += Math.sin(p); });
+  const psi = Math.atan2(sy, sx), Rb = Math.min(1, hyp(sx, sy) / n), sd = Math.sqrt(Math.max(0, -2 * Math.log(Rb))) * R2D;
+  if (r.kind.startsWith("sweep")) { sweepRecorded(r.kind, psi, sd); return; }
+  const t = Date.now(), S = state.sensor, st = S.stations;
+  if (r.kind === "station") {
+    if (!st.length) S.frames[sens.frame] = -psi;
+    st.push({ s: st.length ? st[st.length - 1].s + (+state.nextSp || 0) : 0, psi, frame: sens.frame, t, sd });
+    toast(`S${st.length - 1} recorded` + (sd > 0.25 ? ". The phone moved a little; consider redoing it." : ""));
+  } else if (r.kind === "close") {
+    S.closure = { psi, frame: sens.frame, t, sd };
+    const d = sensorThetas(S, false).drift;
+    toast(`Close check recorded. Drift ${d ? sgn(d.deg, 2) : "—"}°`);
+  } else {
+    const last = st[st.length - 1];
+    S.frames[sens.frame] = wrapPi(last.psi + S.frames[last.frame] - psi);
+    toast(`Re-linked at S${st.length - 1}. Carry on.`);
+  }
+  beep(sd <= 0.25);
+  refreshCache(); save(); renderAll();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && sens.sw) { sens.sw = null; toast("The sweep stopped because the page went to the background. Start it again."); }
+  if (document.visibilityState === "visible" && sens.on) {
+    sens.frame = newFrame(); sens.last = null; sens.buf = []; sens.startPsi = null; sens.wake = null;
+    requestWake(); renderAll();
+  }
+});
+
+/* ============ export ============ */
+const dlP = window.claude && typeof window.claude.use === "function" ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+function fileBase() {
+  const d = new Date(), ds = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const raw = [state.setup.job, state.setup.wall].filter(Boolean).join(" ") || "wall";
+  return (raw.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "wall") + "-arc-" + ds;
+}
+function dxfText() {
+  const d = new Date();
+  return buildDxf(model, {
+    job: state.setup.job, wall: state.setup.wall, tol: state.setup.tol, date: d.toISOString().slice(0, 10),
+    method: methodName(),
+    align: state.setup.align === "best" ? "best fit" : "through ends"
+  });
+}
+function showDxfText(txt, note) { const ta = $("dxfText"); ta.value = txt; ta.hidden = false; $("dxfNote").textContent = note; ta.focus(); ta.select(); }
+async function saveDxf() {
+  if (!model.ok) { toast("Nothing to export yet."); return; }
+  const txt = dxfText(), base = fileBase();
+  if (window.claude && typeof window.claude.use === "function") {
+    const dl = await dlP;
+    if (!dl) { showDxfText(txt, `Saving files isn't available in this view. Copy the text below into a file named ${base}.dxf.`); return; }
+    try { await dl.save({ filename: base + ".zip", data: zipOne(base + ".dxf", txt) }); toast(`Saved ${base}.zip. The DXF is inside.`); }
+    catch (e) {
+      const c = e && e.code;
+      if (c === "declined") return;
+      if (c === "rate_limited") { toast("A save prompt is already open."); return; }
+      showDxfText(txt, `Saving didn't work here (${c || "error"}). Copy the text below into a file named ${base}.dxf.`);
+    }
+    return;
+  }
+  const file = new File([txt], base + ".dxf", { type: "application/dxf" });
+  const touch = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+  if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: base + ".dxf" }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(file), a = document.createElement("a");
+  a.href = url; a.download = base + ".dxf"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(`Downloaded ${base}.dxf`);
+}
+function copyDxf() {
+  if (!model.ok) { toast("Nothing to export yet."); return; }
+  const txt = dxfText();
+  try {
+    navigator.clipboard.writeText(txt).then(() => toast("DXF text copied. Paste it into a file ending in .dxf."),
+      () => showDxfText(txt, "Copying is blocked here. The text is selected below; copy it by hand."));
+  } catch { showDxfText(txt, "Copying is blocked here. The text is selected below; copy it by hand."); }
+}
+
+/* ============ ui helpers ============ */
+let toastT;
+function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 2600); }
+function ask(title, text, yes) {
+  return new Promise(res => {
+    $("cfTitle").textContent = title; $("cfText").textContent = text; $("cfYes").textContent = yes;
+    $("confirmDlg").hidden = false; $("cfNo").focus();
+    const done = v => { $("confirmDlg").hidden = true; $("cfYes").onclick = $("cfNo").onclick = null; res(v); };
+    $("cfYes").onclick = () => done(true); $("cfNo").onclick = () => done(false);
+  });
+}
+function numOrNull(v) { const x = parseFloat(v); return isFinite(x) ? x : null; }
+
+/* ============ events ============ */
+document.querySelector(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (!b) return; state.tab = b.dataset.tab; save(); renderAll(); });
+$("methodSeg").addEventListener("click", e => { const b = e.target.closest("button[data-m]"); if (!b) return; state.method = b.dataset.m; save(); renderAll(); });
+$("exagSeg").addEventListener("click", e => { const b = e.target.closest("button[data-x]"); if (!b) return; state.exag = +b.dataset.x; save(); renderAll(); });
+$("alignSeg").addEventListener("click", e => { const b = e.target.closest("button[data-a]"); if (!b) return; state.setup.align = b.dataset.a; syncSetup(); save(); renderAll(); });
+
+$("btnSensors").addEventListener("click", startSensors);
+$("btnUseString").addEventListener("click", () => { state.method = "string"; save(); renderAll(); window.scrollTo(0, 0); });
+$("fmtSeg").addEventListener("click", e => { const b = e.target.closest("button[data-f]"); if (!b) return; state.setup.fmt = b.dataset.f; syncSetup(); save(); renderAll(); });
+$("btnRecord").addEventListener("click", () => record("station"));
+$("btnRelink").addEventListener("click", () => record("relink"));
+$("btnClose").addEventListener("click", () => record("close"));
+$("btnUndo").addEventListener("click", () => { const st = state.sensor.stations; if (!st.length) return; st.pop(); if (!st.length) { state.sensor.frames = {}; state.sensor.closure = null; } refreshCache(); save(); renderAll(); toast(`S${st.length} removed`); });
+const stepSp = d => { state.nextSp = Math.max(0.25, (+state.nextSp || 0) + d); save(); renderSensorUI(); };
+$("spMinus").addEventListener("click", () => stepSp(-1));
+$("spPlus").addEventListener("click", () => stepSp(1));
+$("nextSpacing").addEventListener("input", e => { const v = parseLen(e.target.value); if (v != null && v > 0) { state.nextSp = v; save(); renderSensorUI(); } });
+
+$("stTable").addEventListener("change", e => {
+  const i = e.target.dataset.si; if (i == null) return;
+  const v = parseLen(e.target.value); if (v == null) return;
+  state.sensor.stations[+i].s = v; save(); renderAll();
+});
+$("stTable").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.del != null) { state.sensor.stations.splice(+b.dataset.del, 1); if (!state.sensor.stations.length) { state.sensor.frames = {}; state.sensor.closure = null; } }
+  else if (b.dataset.delclose) state.sensor.closure = null;
+  refreshCache(); save(); renderAll();
+});
+
+$("btnAddRow").addEventListener("click", () => {
+  const r = state.string.rows, last = r[r.length - 1];
+  r.push({ x: last && isFinite(last.x) ? last.x + (+state.setup.sp || 12) : 0, o: null });
+  save(); renderAll();
+  const inp = document.querySelector(`[data-ro="${r.length - 1}"]`); if (inp) inp.focus();
+});
+$("strTable").addEventListener("change", e => {
+  const t = e.target, i = t.dataset.rx ?? t.dataset.ro; if (i == null) return;
+  state.string.rows[+i][t.dataset.rx != null ? "x" : "o"] = parseLen(t.value); save(); renderAll();
+});
+$("strTable").addEventListener("click", e => { const b = e.target.closest("button[data-rdel]"); if (!b) return; state.string.rows.splice(+b.dataset.rdel, 1); save(); renderAll(); });
+
+$("chordIn").addEventListener("input", e => { state.sensor.chord = parseLen(e.target.value); save(); model = computeModel(); renderResults(); });
+$("riseIn").addEventListener("input", e => { state.sensor.rise = parseLen(e.target.value); save(); model = computeModel(); renderResults(); });
+$("useChord").addEventListener("change", e => { state.sensor.useChord = e.target.checked; save(); renderAll(); });
+$("useDrift").addEventListener("change", e => { state.sensor.useDrift = e.target.checked; save(); renderAll(); });
+$("btnDxf").addEventListener("click", saveDxf);
+$("btnCopy").addEventListener("click", copyDxf);
+
+function syncSetup() {
+  const s = state.setup;
+  $("fJob").value = s.job || ""; $("fWall").value = s.wall || ""; $("fR").value = inVal(s.R); $("fTol").value = inVal(s.tol); $("fSp").value = inVal(s.sp);
+  document.querySelectorAll("#alignSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.a === s.align)));
+  document.querySelectorAll("#fmtSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === (s.fmt || "frac"))));
+}
+[["fJob", "job", false], ["fWall", "wall", false], ["fR", "R", true], ["fTol", "tol", true], ["fSp", "sp", true]].forEach(([id, k, num]) => {
+  $(id).addEventListener("input", e => {
+    const v = num ? parseLen(e.target.value) : e.target.value;
+    if (k === "sp" && v > 0 && state.nextSp === state.setup.sp) state.nextSp = v;
+    state.setup[k] = v; save(); renderAll();
+  });
+});
+
+async function resetAll(title, text) {
+  if (!(await ask(title, text, "Clear"))) return;
+  const keep = state.example ? null : state.setup;
+  const sm = state.sensorMode; state = blankState(); state.sensorMode = sm;
+  if (keep) { state.setup = { ...keep }; state.nextSp = keep.sp || 12; }
+  sens.frame = sens.on ? newFrame() : sens.frame;
+  refreshCache(); syncSetup(); save(); renderAll();
+  toast("Cleared. Ready for a new trace.");
+}
+$("btnNew").addEventListener("click", () => resetAll("Start a new trace?", "This clears the example stations and offsets. Nothing you measured is affected."));
+$("btnClear").addEventListener("click", () => resetAll("Clear all trace data?", "This deletes every recorded station, the close check, the tape values and the string-line offsets on this device. Export a DXF first if you want to keep them."));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("confirmDlg").hidden) $("cfNo").click(); });
+
+let rsT; window.addEventListener("resize", () => { clearTimeout(rsT); rsT = setTimeout(renderAll, 120); });
+
+/* ============ boot ============ */
+if (!("nextSp" in state)) state.nextSp = state.setup.sp || 12;
+syncSetup(); refreshCache(); renderAll();
+if (inClaude) showSensorNotice(CLAUDE_MSG);
+if (state.example && state.tab === "trace") requestAnimationFrame(renderAll);
+</script>
+<script>if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});</script>
+</body></html>
